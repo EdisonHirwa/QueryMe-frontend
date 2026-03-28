@@ -5,7 +5,6 @@ import { Dashboard as AdminDashboard } from './pages/admin';
 import { Dashboard as TeacherDashboard } from './pages/teacher';
 import { Dashboard as StudentDashboard } from './pages/student';
 import { GuestPage } from './pages/guest';
-import DarkModeToggle from './components/DarkModeToggle';
 import './theme/dark-mode.css';
 import './App.css';
 
@@ -22,7 +21,6 @@ function App() {
             <Route path="/guest/*" element={<GuestPage />} />
             <Route path="/" element={<Navigate to="/auth" replace />} />
           </Routes>
-          <DarkModeToggle />
         </div>
       </Router>
     </AuthProvider>
