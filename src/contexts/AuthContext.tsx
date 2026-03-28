@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, ReactNode } from 'react';
 import { AuthContext } from './AuthContextContext';
 
 export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'GUEST';
@@ -44,21 +44,22 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem('queryme_user');
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as User;
-        setUser(parsed);
-        setIsAuthenticated(true);
+        return JSON.parse(stored) as User;
       } catch {
         localStorage.removeItem('queryme_user');
+        return null;
       }
     }
-  }, []);
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return user !== null;
+  });
 
   const login = async (email: string, password: string) => {
     // Mock login — match against MOCK_USERS
