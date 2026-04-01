@@ -288,8 +288,10 @@
   font-weight: 600;
   font-family: 'Montserrat', sans-serif;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
 }
 
 .auth-demo-btn:hover {
