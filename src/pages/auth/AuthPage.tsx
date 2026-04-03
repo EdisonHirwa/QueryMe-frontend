@@ -54,8 +54,8 @@ const AuthPage: React.FC = () => {
       } else {
         localStorage.removeItem('rememberedEmail');
       }
-    } catch {
-      setLoginError('Invalid email or password.');
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Invalid email or password.');
     }
   };
 
@@ -65,8 +65,8 @@ const AuthPage: React.FC = () => {
 
     try {
       await signup(signupName, signupEmail, signupPassword, signupRole);
-    } catch {
-      setSignupError('Signup failed. Please try again.');
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : 'Signup failed. Please try again.');
     }
   };
 
@@ -81,12 +81,9 @@ const AuthPage: React.FC = () => {
             </div>
             <h1 className="auth-title">Create Account</h1>
 
-            <input type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" />
-            <input type="email" placeholder="Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} id="signup-email-input" />
-            
-            {signupRole !== 'GUEST' && (
-              <input type="password" placeholder="Password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} id="signup-password-input" />
-            )}
+            <input type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" autoComplete="name" />
+            <input type="email" placeholder="Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} id="signup-email-input" autoComplete="email" />
+            <input type="password" placeholder="Password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} id="signup-password-input" autoComplete="new-password" />
 
             {/* Role dropdown */}
             <div className="auth-select-wrapper">
@@ -118,8 +115,8 @@ const AuthPage: React.FC = () => {
             </div>
             <h1 className="auth-title">Sign In</h1>
 
-            <input type="text" placeholder="Email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }} id="signin-email-input" />
-            <input type="password" placeholder="Password" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} id="signin-password-input" />
+            <input type="text" placeholder="Email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }} id="signin-email-input" autoComplete="email" />
+            <input type="password" placeholder="Password" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} id="signin-password-input" autoComplete="current-password" />
 
             {loginError && <span className="auth-error">{loginError}</span>}
 

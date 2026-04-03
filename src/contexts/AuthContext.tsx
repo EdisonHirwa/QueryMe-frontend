@@ -12,23 +12,30 @@ export interface AuthContextType {
 }
 
 export interface User {
-  id: number;
+  id: string | number;
   email: string;
   name: string;
   role: UserRole;
   avatar?: string;
 }
 
-interface AuthApiResponse {
+interface SignInApiResponse {
   token: string;
-  user: User;
+  type?: string;
+  id: string;
+  email: string;
+  roles: string[];
+}
+
+interface SignUpApiResponse {
+  message: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
-const LOGIN_ENDPOINT = import.meta.env.VITE_AUTH_LOGIN_ENDPOINT ?? '/api/auth/login';
+const LOGIN_ENDPOINT = import.meta.env.VITE_AUTH_LOGIN_ENDPOINT ?? '/api/auth/signin';
 const SIGNUP_ENDPOINT = import.meta.env.VITE_AUTH_SIGNUP_ENDPOINT ?? '/api/auth/signup';
 
-const requestAuth = async (endpoint: string, payload: Record<string, unknown>): Promise<AuthApiResponse> => {
+async function requestAuth<T>(endpoint: string, payload: Record<string, unknown>): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'POST',
     headers: {
@@ -37,9 +44,9 @@ const requestAuth = async (endpoint: string, payload: Record<string, unknown>): 
     body: JSON.stringify(payload),
   });
 
-  let data: Partial<AuthApiResponse> & { message?: string } = {};
+  let data: Partial<T> & { message?: string } = {};
   try {
-    data = (await response.json()) as Partial<AuthApiResponse> & { message?: string };
+    data = (await response.json()) as Partial<T> & { message?: string };
   } catch {
     // Ignore JSON parsing errors so we can still throw a consistent error below.
   }
@@ -48,13 +55,24 @@ const requestAuth = async (endpoint: string, payload: Record<string, unknown>): 
     throw new Error(data.message || 'Authentication request failed');
   }
 
-  if (!data.user || !data.token) {
-    throw new Error('Invalid authentication response');
-  }
+  return data as T;
+}
 
+const getRoleFromAuthorities = (roles: string[]): UserRole => {
+  const role = roles[0] ?? 'STUDENT';
+  const normalized = role.toUpperCase();
+  if (normalized === 'ADMIN' || normalized === 'TEACHER' || normalized === 'STUDENT' || normalized === 'GUEST') {
+    return normalized;
+  }
+  return 'STUDENT';
+};
+
+const mapSignInResponseToUser = (data: SignInApiResponse): User => {
   return {
-    user: data.user,
-    token: data.token,
+    id: data.id,
+    email: data.email,
+    name: data.email.split('@')[0],
+    role: getRoleFromAuthorities(data.roles),
   };
 };
 
@@ -81,19 +99,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
 
   const login = async (email: string, password: string) => {
-    const result = await requestAuth(LOGIN_ENDPOINT, { email, password });
-    localStorage.setItem('queryme_user', JSON.stringify(result.user));
+    const result = await requestAuth<SignInApiResponse>(LOGIN_ENDPOINT, { email, password });
+    if (!result.token || !result.email || !result.id || !result.roles) {
+      throw new Error('Invalid authentication response');
+    }
+
+    const mappedUser = mapSignInResponseToUser(result);
+    localStorage.setItem('queryme_user', JSON.stringify(mappedUser));
     localStorage.setItem('token', result.token);
-    setUser(result.user);
+    setUser(mappedUser);
     setIsAuthenticated(true);
   };
 
-  const signup = async (name: string, email: string, password: string, role: UserRole = 'STUDENT') => {
-    const result = await requestAuth(SIGNUP_ENDPOINT, { name, email, password, role });
-    localStorage.setItem('queryme_user', JSON.stringify(result.user));
-    localStorage.setItem('token', result.token);
-    setUser(result.user);
-    setIsAuthenticated(true);
+  const signup = async (_name: string, email: string, password: string, role: UserRole = 'STUDENT') => {
+    await requestAuth<SignUpApiResponse>(SIGNUP_ENDPOINT, { email, password, role });
+    await login(email, password);
   };
 
   const logout = () => {
