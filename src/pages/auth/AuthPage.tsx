@@ -21,6 +21,7 @@ const AuthPage: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   // Check for remembered email on mount
   useEffect(() => {
@@ -37,6 +38,7 @@ const AuthPage: React.FC = () => {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupRole, setSignupRole] = useState<UserRole>('STUDENT');
   const [signupError, setSignupError] = useState('');
+  const [isSigningUp, setIsSigningUp] = useState(false);
 
   if (isAuthenticated && user) {
     const dest = ROLE_REDIRECTS[user.role] || '/student';
@@ -45,7 +47,9 @@ const AuthPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSigningIn) return;
     setLoginError('');
+    setIsSigningIn(true);
     try {
       await login(loginEmail, loginPassword);
       // If successful, handle Remember Me
@@ -56,17 +60,23 @@ const AuthPage: React.FC = () => {
       }
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'Invalid email or password.');
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSigningUp) return;
     setSignupError('');
+    setIsSigningUp(true);
 
     try {
       await signup(signupName, signupEmail, signupPassword, signupRole);
     } catch (error) {
       setSignupError(error instanceof Error ? error.message : 'Signup failed. Please try again.');
+    } finally {
+      setIsSigningUp(false);
     }
   };
 
@@ -81,9 +91,9 @@ const AuthPage: React.FC = () => {
             </div>
             <h1 className="auth-title">Create Account</h1>
 
-            <input type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" autoComplete="name" />
-            <input type="email" placeholder="Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} id="signup-email-input" autoComplete="email" />
-            <input type="password" placeholder="Password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} id="signup-password-input" autoComplete="new-password" />
+            <input type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" autoComplete="name" disabled={isSigningUp} />
+            <input type="email" placeholder="Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} id="signup-email-input" autoComplete="email" disabled={isSigningUp} />
+            <input type="password" placeholder="Password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} id="signup-password-input" autoComplete="new-password" disabled={isSigningUp} />
 
             {/* Role dropdown */}
             <div className="auth-select-wrapper">
@@ -92,6 +102,7 @@ const AuthPage: React.FC = () => {
                 value={signupRole}
                 onChange={(e) => setSignupRole(e.target.value as UserRole)}
                 id="signup-role-select"
+                disabled={isSigningUp}
               >
                 <option value="STUDENT">Student</option>
                 <option value="TEACHER">Teacher</option>
@@ -103,7 +114,14 @@ const AuthPage: React.FC = () => {
 
             {signupError && <span className="auth-error">{signupError}</span>}
 
-            <button type="submit" className="auth-btn" id="signup-submit-btn">SIGN UP</button>
+            <button type="submit" className="auth-btn" id="signup-submit-btn" disabled={isSigningUp}>
+              {isSigningUp ? (
+                <span className="auth-btn-content">
+                  <span className="auth-spinner" aria-hidden="true" />
+                  Signing up...
+                </span>
+              ) : 'SIGN UP'}
+            </button>
           </form>
         </div>
 
@@ -115,8 +133,8 @@ const AuthPage: React.FC = () => {
             </div>
             <h1 className="auth-title">Sign In</h1>
 
-            <input type="text" placeholder="Email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }} id="signin-email-input" autoComplete="email" />
-            <input type="password" placeholder="Password" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} id="signin-password-input" autoComplete="current-password" />
+            <input type="text" placeholder="Email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }} id="signin-email-input" autoComplete="email" disabled={isSigningIn} />
+            <input type="password" placeholder="Password" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} id="signin-password-input" autoComplete="current-password" disabled={isSigningIn} />
 
             {loginError && <span className="auth-error">{loginError}</span>}
 
@@ -127,6 +145,7 @@ const AuthPage: React.FC = () => {
                   checked={rememberMe} 
                   onChange={(e) => setRememberMe(e.target.checked)} 
                   id="remember-me-checkbox"
+                  disabled={isSigningIn}
                 />
                 <span className="checkmark"></span>
                 Remember Me
@@ -134,7 +153,14 @@ const AuthPage: React.FC = () => {
               <a href="#" className="auth-forgot-link" id="forgot-password-link">Forget Your Password?</a>
             </div>
 
-            <button type="submit" className="auth-btn" id="signin-submit-btn">SIGN IN</button>
+            <button type="submit" className="auth-btn" id="signin-submit-btn" disabled={isSigningIn}>
+              {isSigningIn ? (
+                <span className="auth-btn-content">
+                  <span className="auth-spinner" aria-hidden="true" />
+                  Signing in...
+                </span>
+              ) : 'SIGN IN'}
+            </button>
           </form>
         </div>
 
@@ -144,12 +170,12 @@ const AuthPage: React.FC = () => {
             <div className="auth-toggle-panel auth-toggle-left">
               <h1>Welcome Back!</h1>
               <p>Enter your personal details to use all of site features</p>
-              <button className="auth-toggle-btn" id="switch-to-signin-btn" onClick={() => setIsSignUp(false)}>SIGN IN</button>
+              <button className="auth-toggle-btn" id="switch-to-signin-btn" onClick={() => setIsSignUp(false)} disabled={isSigningIn || isSigningUp}>SIGN IN</button>
             </div>
             <div className="auth-toggle-panel auth-toggle-right">
               <h1>Hello, Friend!</h1>
               <p>Register with your personal details to use all of site features</p>
-              <button className="auth-toggle-btn" id="switch-to-signup-btn" onClick={() => setIsSignUp(true)}>SIGN UP</button>
+              <button className="auth-toggle-btn" id="switch-to-signup-btn" onClick={() => setIsSignUp(true)} disabled={isSigningIn || isSigningUp}>SIGN UP</button>
             </div>
           </div>
         </div>

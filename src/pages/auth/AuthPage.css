@@ -312,6 +312,35 @@
   transform: translateY(0);
 }
 
+.auth-btn:disabled,
+.auth-toggle-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.auth-btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: authSpin 0.8s linear infinite;
+}
+
+@keyframes authSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ========== Toggle / Overlay Panel ========== */
 .auth-toggle-container {
   position: absolute;
