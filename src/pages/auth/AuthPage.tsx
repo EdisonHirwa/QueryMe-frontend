@@ -36,9 +36,7 @@ const AuthPage: React.FC = () => {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupRole, setSignupRole] = useState<UserRole>('STUDENT');
-  const [signupGuestDuration, setSignupGuestDuration] = useState('24');
   const [signupError, setSignupError] = useState('');
-  const [guestSuccessMsg, setGuestSuccessMsg] = useState('');
 
   if (isAuthenticated && user) {
     const dest = ROLE_REDIRECTS[user.role] || '/student';
@@ -57,31 +55,19 @@ const AuthPage: React.FC = () => {
         localStorage.removeItem('rememberedEmail');
       }
     } catch {
-      setLoginError('Invalid email or password. Try the demo credentials below.');
+      setLoginError('Invalid email or password.');
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError('');
-    setGuestSuccessMsg('');
-
-    if (signupRole === 'GUEST') {
-      setGuestSuccessMsg(`Guest access request for ${signupGuestDuration} hours has been sent to the Admin!`);
-      return;
-    }
 
     try {
       await signup(signupName, signupEmail, signupPassword, signupRole);
     } catch {
       setSignupError('Signup failed. Please try again.');
     }
-  };
-
-  const fillDemoCredentials = (email: string, password: string) => {
-    setLoginEmail(email);
-    setLoginPassword(password);
-    setLoginError('');
   };
 
   return (
@@ -118,24 +104,9 @@ const AuthPage: React.FC = () => {
               <span className="auth-select-arrow">▾</span>
             </div>
 
-            {signupRole === 'GUEST' && (
-              <input 
-                type="number" 
-                placeholder="Requested Session Duration (Hours)" 
-                value={signupGuestDuration} 
-                onChange={(e) => setSignupGuestDuration(e.target.value)} 
-                min="1" 
-                max="720"
-                style={{ marginTop: '-4px' }}
-              />
-            )}
-
             {signupError && <span className="auth-error">{signupError}</span>}
-            {guestSuccessMsg && <span className="auth-error" style={{ color: '#38a169', background: 'rgba(56,161,105,0.1)' }}>{guestSuccessMsg}</span>}
 
-            <button type="submit" className="auth-btn" id="signup-submit-btn">
-              {signupRole === 'GUEST' ? 'REQUEST ACCESS' : 'SIGN UP'}
-            </button>
+            <button type="submit" className="auth-btn" id="signup-submit-btn">SIGN UP</button>
           </form>
         </div>
 
@@ -167,17 +138,6 @@ const AuthPage: React.FC = () => {
             </div>
 
             <button type="submit" className="auth-btn" id="signin-submit-btn">SIGN IN</button>
-
-            {/* Demo credentials quick-fill */}
-            <div className="auth-demo-creds">
-              <span className="auth-demo-label">Demo accounts:</span>
-              <div className="auth-demo-buttons">
-                <button type="button" className="auth-demo-btn" onClick={() => fillDemoCredentials('admin@queryme.com', 'admin123')}>Admin</button>
-                <button type="button" className="auth-demo-btn" onClick={() => fillDemoCredentials('teacher@queryme.com', 'teacher123')}>Teacher</button>
-                <button type="button" className="auth-demo-btn auth-demo-btn--active" onClick={() => fillDemoCredentials('student@queryme.com', 'student123')}>Student</button>
-                <button type="button" className="auth-demo-btn" onClick={() => fillDemoCredentials('guest@queryme.com', 'guest123')}>Guest</button>
-              </div>
-            </div>
           </form>
         </div>
 

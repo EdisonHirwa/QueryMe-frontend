@@ -19,24 +19,43 @@ export interface User {
   avatar?: string;
 }
 
-// ── Mock credentials for development ──
-const MOCK_USERS: Record<string, { password: string; user: User }> = {
-  'admin@queryme.com': {
-    password: 'admin123',
-    user: { id: 1, email: 'admin@queryme.com', name: 'Admin User', role: 'ADMIN' },
-  },
-  'teacher@queryme.com': {
-    password: 'teacher123',
-    user: { id: 2, email: 'teacher@queryme.com', name: 'Prof. Smith', role: 'TEACHER' },
-  },
-  'student@queryme.com': {
-    password: 'student123',
-    user: { id: 3, email: 'student@queryme.com', name: 'John Student', role: 'STUDENT' },
-  },
-  'guest@queryme.com': {
-    password: 'guest123',
-    user: { id: 4, email: 'guest@queryme.com', name: 'Guest Viewer', role: 'GUEST' },
-  },
+interface AuthApiResponse {
+  token: string;
+  user: User;
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const LOGIN_ENDPOINT = import.meta.env.VITE_AUTH_LOGIN_ENDPOINT ?? '/api/auth/login';
+const SIGNUP_ENDPOINT = import.meta.env.VITE_AUTH_SIGNUP_ENDPOINT ?? '/api/auth/signup';
+
+const requestAuth = async (endpoint: string, payload: Record<string, unknown>): Promise<AuthApiResponse> => {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let data: Partial<AuthApiResponse> & { message?: string } = {};
+  try {
+    data = (await response.json()) as Partial<AuthApiResponse> & { message?: string };
+  } catch {
+    // Ignore JSON parsing errors so we can still throw a consistent error below.
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Authentication request failed');
+  }
+
+  if (!data.user || !data.token) {
+    throw new Error('Invalid authentication response');
+  }
+
+  return {
+    user: data.user,
+    token: data.token,
+  };
 };
 
 interface AuthProviderProps {
@@ -62,29 +81,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
 
   const login = async (email: string, password: string) => {
-    // Mock login — match against MOCK_USERS
-    const entry = MOCK_USERS[email.toLowerCase()];
-    if (entry && entry.password === password) {
-      localStorage.setItem('queryme_user', JSON.stringify(entry.user));
-      localStorage.setItem('token', 'mock-jwt-' + entry.user.role.toLowerCase());
-      setUser(entry.user);
-      setIsAuthenticated(true);
-      return;
-    }
-    throw new Error('Invalid email or password');
+    const result = await requestAuth(LOGIN_ENDPOINT, { email, password });
+    localStorage.setItem('queryme_user', JSON.stringify(result.user));
+    localStorage.setItem('token', result.token);
+    setUser(result.user);
+    setIsAuthenticated(true);
   };
 
-  const signup = async (name: string, email: string, _password: string, role: UserRole = 'STUDENT') => {
-    // Mock signup — just create a session
-    const newUser: User = {
-      id: Date.now(),
-      email,
-      name,
-      role,
-    };
-    localStorage.setItem('queryme_user', JSON.stringify(newUser));
-    localStorage.setItem('token', 'mock-jwt-' + role.toLowerCase());
-    setUser(newUser);
+  const signup = async (name: string, email: string, password: string, role: UserRole = 'STUDENT') => {
+    const result = await requestAuth(SIGNUP_ENDPOINT, { name, email, password, role });
+    localStorage.setItem('queryme_user', JSON.stringify(result.user));
+    localStorage.setItem('token', result.token);
+    setUser(result.user);
     setIsAuthenticated(true);
   };
 

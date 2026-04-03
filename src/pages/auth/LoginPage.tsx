@@ -7,7 +7,7 @@ interface LoginPageProps {
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToSignup, onLogin }) => {
-  const [email, setEmail] = useState('AsmrProg');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {

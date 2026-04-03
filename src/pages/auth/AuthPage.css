@@ -312,56 +312,6 @@
   transform: translateY(0);
 }
 
-/* ---------- Demo Credentials ---------- */
-.auth-demo-creds {
-  margin-top: 16px;
-  text-align: center;
-}
-
-.auth-demo-label {
-  font-size: 10px;
-  color: #aaa;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.auth-demo-buttons {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.auth-demo-btn {
-  padding: 5px 12px;
-  border: 1px solid #bbc7f5;
-  border-radius: 6px;
-  background: #eff2ff;
-  color: #2f3b77;
-  font-size: 10px;
-  font-weight: 600;
-  font-family: 'Montserrat', sans-serif;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  letter-spacing: 0.3px;
-  position: relative;
-  overflow: hidden;
-}
-
-.auth-demo-btn:hover {
-  border-color: #6a3cb0;
-  color: #6a3cb0;
-  background: rgba(106, 60, 176, 0.05);
-}
-
-.auth-demo-btn--active {
-  border-color: #6a3cb0;
-  color: #6a3cb0;
-  background: rgba(106, 60, 176, 0.08);
-}
-
 /* ========== Toggle / Overlay Panel ========== */
 .auth-toggle-container {
   position: absolute;
