@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts';
-import type { UserRole } from '../../contexts';
 import logoImg from '../../assets/logo.png';
+import { clearRememberedEmail, getRememberedEmail, setRememberedEmail } from '../../utils/authStorage';
+import { extractErrorMessage } from '../../utils/errorUtils';
 import './AuthPage.css';
 
 const ROLE_REDIRECTS: Record<string, string> = {
@@ -25,7 +26,7 @@ const AuthPage: React.FC = () => {
 
   // Check for remembered email on mount
   useEffect(() => {
-    const savedEmail = localStorage.getItem('rememberedEmail');
+    const savedEmail = getRememberedEmail();
     if (savedEmail) {
       setLoginEmail(savedEmail);
       setRememberMe(true);
@@ -36,7 +37,6 @@ const AuthPage: React.FC = () => {
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [signupRole, setSignupRole] = useState<UserRole>('STUDENT');
   const [signupError, setSignupError] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
 
@@ -51,15 +51,14 @@ const AuthPage: React.FC = () => {
     setLoginError('');
     setIsSigningIn(true);
     try {
-      await login(loginEmail, loginPassword);
-      // If successful, handle Remember Me
+      await login(loginEmail, loginPassword, rememberMe);
       if (rememberMe) {
-        localStorage.setItem('rememberedEmail', loginEmail);
+        setRememberedEmail(loginEmail);
       } else {
-        localStorage.removeItem('rememberedEmail');
+        clearRememberedEmail();
       }
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Invalid email or password.');
+      setLoginError(extractErrorMessage(error, 'Invalid email or password.'));
     } finally {
       setIsSigningIn(false);
     }
@@ -72,9 +71,9 @@ const AuthPage: React.FC = () => {
     setIsSigningUp(true);
 
     try {
-      await signup(signupName, signupEmail, signupPassword, signupRole);
+      await signup(signupName, signupEmail, signupPassword);
     } catch (error) {
-      setSignupError(error instanceof Error ? error.message : 'Signup failed. Please try again.');
+      setSignupError(extractErrorMessage(error, 'Signup failed. Please try again.'));
     } finally {
       setIsSigningUp(false);
     }
@@ -94,22 +93,14 @@ const AuthPage: React.FC = () => {
             <input type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" autoComplete="name" disabled={isSigningUp} />
             <input type="email" placeholder="Email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} id="signup-email-input" autoComplete="email" disabled={isSigningUp} />
             <input type="password" placeholder="Password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} id="signup-password-input" autoComplete="new-password" disabled={isSigningUp} />
-
-            {/* Role dropdown */}
             <div className="auth-select-wrapper">
-              <select
-                className="auth-select"
-                value={signupRole}
-                onChange={(e) => setSignupRole(e.target.value as UserRole)}
-                id="signup-role-select"
-                disabled={isSigningUp}
-              >
-                <option value="STUDENT">Student</option>
-                <option value="TEACHER">Teacher</option>
-                <option value="ADMIN">Admin</option>
-                <option value="GUEST">Guest</option>
-              </select>
-              <span className="auth-select-arrow">▾</span>
+              <div className="auth-select" id="signup-role-select" aria-disabled="true">
+                Student Account
+              </div>
+              <span className="auth-select-arrow">🔒</span>
+            </div>
+            <div className="auth-demo-label" style={{ marginBottom: 12 }}>
+              Public signup is limited to student accounts. Teacher, admin, and guest access are provisioned separately.
             </div>
 
             {signupError && <span className="auth-error">{signupError}</span>}

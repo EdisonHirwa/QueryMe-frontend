@@ -1,116 +1,113 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { examApi, resultApi, sessionApi, type StudentExamResult } from '../../api';
 import { useAuth } from '../../contexts';
-import { examApi, resultApi, sessionApi } from '../../services/api';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatDateTime, getCourseName } from '../../utils/queryme';
 
-interface QuestionDetail {
-  number: number;
-  marks: number;
-  scored: number;
-  submitted: boolean;
-}
-
-interface ExamResult {
+interface ResultRow {
   sessionId: string;
+  examId: string;
   title: string;
   course: string;
-  date: string;
-  score: number;
-  total: number;
-  percentage: number;
-  status: 'passed' | 'failed' | 'submitted' | 'timed_out';
-  teacher: string;
-  questionsDetail: QuestionDetail[];
+  submittedAt: string;
+  visible: boolean;
+  totalScore: number;
+  totalMaxScore: number;
+  visibilityMode: string;
+  questions: NonNullable<StudentExamResult['questions']>;
 }
 
 const MyResults: React.FC = () => {
   const { user } = useAuth();
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [results, setResults] = useState<ExamResult[]>([]);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [results, setResults] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadResults = async () => {
       if (!user) {
-        setError('Please log in to view your results.');
+        setError('Please sign in to view your results.');
         setLoading(false);
         return;
       }
 
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
-        const sessions = await sessionApi.getSessionsByStudent(String(user.id));
+        const sessions = await sessionApi.getSessionsByStudent(user.id, controller.signal);
 
-        const loadedResults = await Promise.all(
-          sessions.map(async session => {
-            const exam = await examApi.getExam(session.examId);
-            let resultData = null;
-
-            try {
-              resultData = await resultApi.getResult(session.id);
-            } catch {
-              // If result details are unavailable, continue with session data.
-            }
-
-            const totalMarks = resultData?.totalMarks ?? session.totalMarks ?? exam.questions?.reduce((sum, question) => sum + question.marks, 0) ?? 0;
-            const score = resultData?.score ?? session.score ?? 0;
-            const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
-            const status: ExamResult['status'] = resultData?.percentage !== undefined
-              ? (resultData.percentage >= 50 ? 'passed' : 'failed')
-              : session.status === 'timed_out'
-                ? 'timed_out'
-                : session.status === 'submitted'
-                  ? 'submitted'
-                  : 'submitted';
+        const rows = await Promise.all(
+          sessions.map(async (session) => {
+            const [exam, sessionResult] = await Promise.all([
+              examApi.getExam(String(session.examId), controller.signal).catch(() => null),
+              resultApi.getSessionResult(String(session.id), controller.signal).catch(() => null),
+            ]);
 
             return {
-              sessionId: session.id,
-              title: exam.title,
-              course: exam.course?.name || exam.courseId || 'Unknown Course',
-              date: session.submittedAt || session.startedAt || '',
-              score,
-              total: totalMarks,
-              percentage,
-              status,
-              teacher: exam.teacher?.name || 'Unknown Teacher',
-              questionsDetail: exam.questions?.map((question, index) => ({
-                number: index + 1,
-                marks: question.marks,
-                scored: resultData?.answers?.[question.id] ? question.marks : 0,
-                submitted: Boolean(resultData?.answers?.[question.id] || session.answers?.[question.id]),
-              })) ?? [],
-            };
-          })
+              sessionId: String(session.id),
+              examId: String(session.examId),
+              title: exam?.title || 'Exam',
+              course: getCourseName(exam?.course, exam?.courseId),
+              submittedAt: session.submittedAt || session.startedAt || '',
+              visible: sessionResult?.visible ?? false,
+              totalScore: sessionResult?.totalScore ?? 0,
+              totalMaxScore: sessionResult?.totalMaxScore ?? 0,
+              visibilityMode: String(sessionResult?.visibilityMode || exam?.visibilityMode || 'N/A'),
+              questions: sessionResult?.questions || [],
+            } satisfies ResultRow;
+          }),
         );
 
-        setResults(loadedResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-        setError(null);
+        if (!controller.signal.aborted) {
+          setResults(
+            rows.sort(
+              (left, right) => new Date(right.submittedAt || 0).getTime() - new Date(left.submittedAt || 0).getTime(),
+            ),
+          );
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load results');
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load your results.'));
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    loadResults();
+    void loadResults();
+
+    return () => controller.abort();
   }, [user]);
 
-  const totalExams = results.length;
-  const passedCount = results.filter(r => r.status === 'passed').length;
-  const averageScore = totalExams > 0
-    ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / totalExams)
-    : 0;
+  const visibleResults = useMemo(
+    () => results.filter((result) => result.visible && result.totalMaxScore > 0),
+    [results],
+  );
+
+  const averageScore = useMemo(() => {
+    if (visibleResults.length === 0) {
+      return 0;
+    }
+
+    return Math.round(
+      visibleResults.reduce((sum, result) => sum + (result.totalScore / result.totalMaxScore) * 100, 0) / visibleResults.length,
+    );
+  }, [visibleResults]);
 
   if (loading) {
     return (
       <div>
         <div className="page-header">
           <h1>My Results</h1>
-          <p>Loading results from your backend data.</p>
+          <p>Loading the session results released to your account.</p>
         </div>
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div>Loading results...</div>
-        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Loading results...</div>
       </div>
     );
   }
@@ -120,11 +117,9 @@ const MyResults: React.FC = () => {
       <div>
         <div className="page-header">
           <h1>My Results</h1>
-          <p>View your exam scores and detailed feedback</p>
+          <p>View your exam scores and released feedback.</p>
         </div>
-        <div style={{ textAlign: 'center', padding: '40px', color: 'red' }}>
-          <div>Error: {error}</div>
-        </div>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'red' }}>{error}</div>
       </div>
     );
   }
@@ -133,101 +128,98 @@ const MyResults: React.FC = () => {
     <div>
       <div className="page-header">
         <h1>My Results</h1>
-        <p>View your exam scores and detailed feedback</p>
+        <p>Only the results the backend marks as visible are shown in detail.</p>
       </div>
 
       <div className="stat-grid" style={{ marginBottom: '24px' }}>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(106, 60, 176, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6a3cb0" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-          </div>
-          <div className="stat-card-value">{totalExams}</div>
-          <div className="stat-card-label">Exams Taken</div>
+          <div className="stat-card-value">{results.length}</div>
+          <div className="stat-card-label">Total Sessions</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(56, 161, 105, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38a169" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-          </div>
-          <div className="stat-card-value">{passedCount}</div>
-          <div className="stat-card-label">Passed</div>
+          <div className="stat-card-value">{visibleResults.length}</div>
+          <div className="stat-card-label">Visible Results</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(49, 130, 206, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3182ce" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-          </div>
           <div className="stat-card-value">{averageScore}%</div>
-          <div className="stat-card-label">Average Score</div>
+          <div className="stat-card-label">Average Visible Score</div>
         </div>
         <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(229, 62, 62, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e53e3e" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-          </div>
-          <div className="stat-card-value">{totalExams - passedCount}</div>
-          <div className="stat-card-label">Not Passed</div>
+          <div className="stat-card-value">{results.length - visibleResults.length}</div>
+          <div className="stat-card-label">Awaiting Release</div>
         </div>
       </div>
 
       <div className="content-card">
         <div className="content-card-header">
-          <h2>Exam History</h2>
+          <h2>Session History</h2>
         </div>
         <div className="content-card-body" style={{ padding: 0 }}>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Exam</th>
-                <th>Course</th>
-                <th>Date</th>
+                <th>Submitted</th>
+                <th>Visibility</th>
                 <th>Score</th>
-                <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {results.map(result => (
+              {results.map((result) => (
                 <React.Fragment key={result.sessionId}>
-                  <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(expanded === result.sessionId ? null : result.sessionId)}>
+                  <tr style={{ cursor: result.visible ? 'pointer' : 'default' }} onClick={() => result.visible && setExpandedSessionId(expandedSessionId === result.sessionId ? null : result.sessionId)}>
                     <td>
                       <div style={{ fontWeight: 600, color: '#1a1a2e' }}>{result.title}</div>
-                      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>👤 {result.teacher}</div>
+                      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>{result.course}</div>
                     </td>
-                    <td style={{ fontSize: '12px', color: '#666' }}>{result.course}</td>
-                    <td style={{ fontSize: '12px', color: '#666' }}>{result.date ? new Date(result.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</td>
+                    <td style={{ fontSize: '12px', color: '#666' }}>{formatDateTime(result.submittedAt)}</td>
                     <td>
-                      <span style={{ fontWeight: 700, color: '#1a1a2e', fontSize: '15px' }}>{result.score}</span>
-                      <span style={{ color: '#888', fontSize: '12px' }}>/{result.total}</span>
-                    </td>
-                    <td>
-                      <span className={`badge ${result.status === 'passed' ? 'badge-green' : result.status === 'failed' ? 'badge-red' : 'badge-gray'}`}>{result.status}</span>
+                      <span className={`badge ${result.visible ? 'badge-green' : 'badge-gray'}`}>
+                        {result.visible ? result.visibilityMode : 'Hidden'}
+                      </span>
                     </td>
                     <td>
-                      <span style={{ color: '#aaa', fontSize: '14px', transition: 'transform 0.2s', display: 'inline-block', transform: expanded === result.sessionId ? 'rotate(90deg)' : 'rotate(0)' }}>▶</span>
+                      {result.visible ? (
+                        <span style={{ fontWeight: 700, color: '#1a1a2e' }}>
+                          {result.totalScore}/{result.totalMaxScore}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#888' }}>Awaiting release</span>
+                      )}
                     </td>
+                    <td>{result.visible ? '▶' : ''}</td>
                   </tr>
-                  {expanded === result.sessionId && (
+                  {expandedSessionId === result.sessionId && (
                     <tr>
-                      <td colSpan={6} style={{ background: '#fafafe', padding: '16px 24px' }}>
+                      <td colSpan={5} style={{ background: '#fafafe', padding: '16px 24px' }}>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                          {result.questionsDetail.map(q => (
-                            <div key={q.number} style={{
-                              padding: '10px 16px',
-                              borderRadius: '10px',
-                              background: '#fff',
-                              border: '1px solid #e8e8ee',
-                              minWidth: '100px',
-                              textAlign: 'center',
-                            }}>
-                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#888', marginBottom: '4px', textTransform: 'uppercase' }}>Q{q.number}</div>
-                              <div style={{ fontSize: '18px', fontWeight: 700, color: q.scored === q.marks ? '#38a169' : q.scored === 0 ? '#e53e3e' : '#dd6b20' }}>
-                                {q.scored}<span style={{ fontSize: '12px', color: '#888' }}>/{q.marks}</span>
+                          {result.questions.map((question, index) => (
+                            <div
+                              key={String(question.questionId)}
+                              style={{
+                                padding: '10px 16px',
+                                borderRadius: '10px',
+                                background: '#fff',
+                                border: '1px solid #e8e8ee',
+                                minWidth: '140px',
+                              }}
+                            >
+                              <div style={{ fontSize: '10px', fontWeight: 700, color: '#888', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                Question {index + 1}
                               </div>
-                              {!q.submitted && <div style={{ fontSize: '9px', color: '#e53e3e', marginTop: '2px' }}>Not submitted</div>}
+                              <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '6px' }}>{question.prompt}</div>
+                              <div style={{ fontSize: '12px', color: '#666' }}>
+                                Score: {question.score ?? 0}/{question.maxScore ?? 0}
+                              </div>
+                              <div style={{ fontSize: '12px', color: question.isCorrect ? '#38a169' : '#dd6b20', marginTop: '4px' }}>
+                                {question.isCorrect ? 'Correct' : 'Reviewed'}
+                              </div>
                             </div>
                           ))}
-                        </div>
-                        <div style={{ marginTop: '12px', display: 'flex', gap: '12px', fontSize: '11px', color: '#888' }}>
-                          <span>📊 Score: <strong style={{ color: '#1a1a2e' }}>{result.percentage}%</strong></span>
-                          <span>📝 Questions reviewed: <strong style={{ color: '#1a1a2e' }}>{result.questionsDetail.length}</strong></span>
+                          {result.questions.length === 0 && (
+                            <div style={{ color: '#666' }}>No question breakdown was returned for this session.</div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -236,8 +228,8 @@ const MyResults: React.FC = () => {
               ))}
               {results.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
-                    No results available yet.
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                    No exam sessions have been recorded yet.
                   </td>
                 </tr>
               )}

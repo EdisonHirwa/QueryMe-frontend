@@ -1,162 +1,175 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { courseApi, examApi, resultApi } from '../../api';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import type { Course, Exam, TeacherResultRow } from '../../api';
 
-// Enhanced mock data to support drill-down metrics per course
-const courseData = [
-  { courseId: 'C101', name: 'Database Systems 101', exams: 4, students: 45, avgScore: 78, metrics: { selectPass: 88, joinPass: 64, windowPass: 42, queriesGraded: 4203, passRate: 74, avgTime: 12, timeoutRate: 15 } },
-  { courseId: 'C201', name: 'Data Management', exams: 2, students: 30, avgScore: 82, metrics: { selectPass: 92, joinPass: 75, windowPass: 50, queriesGraded: 1250, passRate: 82, avgTime: 14, timeoutRate: 6 } },
-  { courseId: 'C301', name: 'Advanced SQL Masters', exams: 6, students: 15, avgScore: 91, metrics: { selectPass: 98, joinPass: 89, windowPass: 85, queriesGraded: 2450, passRate: 91, avgTime: 18, timeoutRate: 4 } },
-];
+interface CourseMetrics {
+  course: Course;
+  exams: Exam[];
+  resultRows: TeacherResultRow[];
+}
 
 const Reports: React.FC = () => {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('ALL');
+  const [selectedCourseId, setSelectedCourseId] = useState('ALL');
+  const [metrics, setMetrics] = useState<CourseMetrics[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Compute aggregate statistics if "ALL" is selected, otherwise get specific course metrics
-  const activeMetrics = React.useMemo(() => {
-    if (selectedCourseId === 'ALL') {
-       return {
-         selectPass: Math.round(courseData.reduce((acc, c) => acc + c.metrics.selectPass, 0) / courseData.length),
-         joinPass: Math.round(courseData.reduce((acc, c) => acc + c.metrics.joinPass, 0) / courseData.length),
-         windowPass: Math.round(courseData.reduce((acc, c) => acc + c.metrics.windowPass, 0) / courseData.length),
-         queriesGraded: courseData.reduce((acc, c) => acc + c.metrics.queriesGraded, 0),
-         passRate: Math.round(courseData.reduce((acc, c) => acc + c.metrics.passRate, 0) / courseData.length),
-         avgTime: Math.round(courseData.reduce((acc, c) => acc + c.metrics.avgTime, 0) / courseData.length),
-         timeoutRate: Math.round(courseData.reduce((acc, c) => acc + c.metrics.timeoutRate, 0) / courseData.length),
-       };
-    }
-    return courseData.find(c => c.courseId === selectedCourseId)!.metrics;
-  }, [selectedCourseId]);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadReports = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const courses = await courseApi.getCourses(controller.signal);
+        const reportRows = await Promise.all(
+          courses.map(async (course) => {
+            const exams = await examApi.getExamsByCourse(String(course.id), controller.signal).catch(() => [] as Exam[]);
+            const resultRows = await Promise.all(
+              exams.map((exam) => resultApi.getExamDashboard(String(exam.id), controller.signal).catch(() => [] as TeacherResultRow[])),
+            );
+
+            return {
+              course,
+              exams,
+              resultRows: resultRows.flat(),
+            } satisfies CourseMetrics;
+          }),
+        );
+
+        if (!controller.signal.aborted) {
+          setMetrics(reportRows);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load platform reports.'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadReports();
+    return () => controller.abort();
+  }, []);
+
+  const activeMetrics = useMemo(() => {
+    const selected = selectedCourseId === 'ALL'
+      ? metrics
+      : metrics.filter((metric) => String(metric.course.id) === selectedCourseId);
+
+    const exams = selected.flatMap((metric) => metric.exams);
+    const resultRows = selected.flatMap((metric) => metric.resultRows);
+    const averageScore = resultRows.length
+      ? Math.round(
+          resultRows.reduce((sum, row) => sum + (((row.score || 0) / (row.maxScore || 1)) * 100), 0) / resultRows.length,
+        )
+      : 0;
+
+    const correctRate = resultRows.length
+      ? Math.round((resultRows.filter((row) => row.isCorrect).length / resultRows.length) * 100)
+      : 0;
+
+    return {
+      exams: exams.length,
+      resultRows: resultRows.length,
+      averageScore,
+      correctRate,
+    };
+  }, [metrics, selectedCourseId]);
+
+  if (loading) {
+    return <div style={{ padding: '24px' }}>Loading reports...</div>;
+  }
 
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>Platform Reports</h1>
-          <p>Aggregate performance metrics across all courses and exams</p>
+          <p>Course-by-course metrics derived from exams and latest result dashboard rows.</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => setSelectedCourseId('ALL')} style={{ opacity: selectedCourseId === 'ALL' ? 0.5 : 1, pointerEvents: selectedCourseId === 'ALL' ? 'none' : 'auto' }}>
-          Reset Global View
+        <button className="btn btn-secondary btn-sm" onClick={() => setSelectedCourseId('ALL')}>
+          Reset View
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '22px' }}>
-        
-        {/* Course Performance Summary */}
+      {error && <div style={{ marginBottom: '16px', color: '#e53e3e' }}>{error}</div>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px' }}>
         <div className="content-card" style={{ gridColumn: '1 / -1' }}>
           <div className="content-card-header">
-            <h2>📈 Course Performance Overview</h2>
+            <h2>Course Performance Overview</h2>
           </div>
           <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
-             <table className="data-table">
-               <thead>
-                 <tr>
-                   <th>Course Name</th>
-                   <th>Exams Conducted</th>
-                   <th>Enrolled Students</th>
-                   <th>Avg. Participant Score</th>
-                   <th>Action</th>
-                 </tr>
-               </thead>
-               <tbody>
-                  {courseData.map((r) => (
-                    <tr key={r.courseId} style={{ background: selectedCourseId === r.courseId ? 'var(--accent-bg)' : 'transparent' }}>
-                      <td style={{ fontWeight: 600 }}>{r.name}</td>
-                      <td>{r.exams}</td>
-                      <td>{r.students}</td>
-                      <td><span className="badge badge-green" style={{ fontSize: '13px' }}>{r.avgScore}%</span></td>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Course</th>
+                  <th>Exams</th>
+                  <th>Result Rows</th>
+                  <th>Average Score</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.map((metric) => {
+                  const averageScore = metric.resultRows.length
+                    ? Math.round(
+                        metric.resultRows.reduce((sum, row) => sum + (((row.score || 0) / (row.maxScore || 1)) * 100), 0) / metric.resultRows.length,
+                      )
+                    : 0;
+
+                  return (
+                    <tr key={String(metric.course.id)}>
+                      <td style={{ fontWeight: 600 }}>{metric.course.name}</td>
+                      <td>{metric.exams.length}</td>
+                      <td>{metric.resultRows.length}</td>
+                      <td>{averageScore}%</td>
                       <td>
-                         <button 
-                            className="btn btn-sm" 
-                            style={{ 
-                              background: selectedCourseId === r.courseId ? '#6a3cb0' : 'rgba(106, 60, 176, 0.1)', 
-                              color: selectedCourseId === r.courseId ? '#fff' : '#6a3cb0', 
-                              border: 'none', 
-                              padding: '4px 12px' 
-                            }}
-                            onClick={() => setSelectedCourseId(r.courseId)}
-                          >
-                           {selectedCourseId === r.courseId ? 'Viewing...' : 'Inspect Data'}
-                         </button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => setSelectedCourseId(String(metric.course.id))}>
+                          Inspect
+                        </button>
                       </td>
                     </tr>
-                  ))}
-               </tbody>
-             </table>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Success Rates */}
         <div className="content-card">
-           <div className="content-card-header">
-             <h2>🎯 Query Success Rates {selectedCourseId !== 'ALL' && '(Filtered)'}</h2>
-           </div>
-           <div className="content-card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                       <span>SELECT statements</span>
-                       <span style={{ fontWeight: 600 }}>{activeMetrics.selectPass}% Pass</span>
-                    </div>
-                    <div className="progress-bg">
-                       <div style={{ width: `${activeMetrics.selectPass}%`, height: '100%', background: '#38a169', borderRadius: '4px', transition: 'width 0.5s ease-out' }} />
-                    </div>
-                 </div>
-                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                       <span>JOIN operations</span>
-                       <span style={{ fontWeight: 600 }}>{activeMetrics.joinPass}% Pass</span>
-                    </div>
-                    <div className="progress-bg">
-                       <div style={{ width: `${activeMetrics.joinPass}%`, height: '100%', background: '#dd6b20', borderRadius: '4px', transition: 'width 0.5s ease-out' }} />
-                    </div>
-                 </div>
-                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                       <span>Window Functions</span>
-                       <span style={{ fontWeight: 600 }}>{activeMetrics.windowPass}% Pass</span>
-                    </div>
-                    <div className="progress-bg">
-                       <div style={{ width: `${activeMetrics.windowPass}%`, height: '100%', background: '#e53e3e', borderRadius: '4px', transition: 'width 0.5s ease-out' }} />
-                    </div>
-                 </div>
-              </div>
-           </div>
+          <div className="content-card-header">
+            <h2>Key Indicators</h2>
+          </div>
+          <div className="content-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="metric-box"><div style={{ fontSize: '24px', fontWeight: 700 }}>{activeMetrics.exams}</div><div style={{ fontSize: '11px', opacity: 0.7 }}>Exams</div></div>
+              <div className="metric-box"><div style={{ fontSize: '24px', fontWeight: 700 }}>{activeMetrics.resultRows}</div><div style={{ fontSize: '11px', opacity: 0.7 }}>Result Rows</div></div>
+              <div className="metric-box"><div style={{ fontSize: '24px', fontWeight: 700 }}>{activeMetrics.averageScore}%</div><div style={{ fontSize: '11px', opacity: 0.7 }}>Average Score</div></div>
+              <div className="metric-box"><div style={{ fontSize: '24px', fontWeight: 700 }}>{activeMetrics.correctRate}%</div><div style={{ fontSize: '11px', opacity: 0.7 }}>Correct Rate</div></div>
+            </div>
+          </div>
         </div>
 
-        {/* Global Statistics */}
         <div className="content-card">
-           <div className="content-card-header">
-             <h2>📊 Key Indicators {selectedCourseId !== 'ALL' && '(Filtered)'}</h2>
-           </div>
-           <div className="content-card-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                 <div className="metric-box">
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#6a3cb0', marginBottom: '4px' }}>
-                       {activeMetrics.queriesGraded.toLocaleString()}
-                    </div>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.7 }}>Queries Graded</div>
-                 </div>
-                 <div className="metric-box">
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#38a169', marginBottom: '4px' }}>
-                       {activeMetrics.passRate}%
-                    </div>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.7 }}>Submission Pass Rate</div>
-                 </div>
-                 <div className="metric-box">
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#dd6b20', marginBottom: '4px' }}>
-                       {activeMetrics.avgTime}m
-                    </div>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.7 }}>Avg Time per Question</div>
-                 </div>
-                 <div className="metric-box">
-                    <div style={{ fontSize: '24px', fontWeight: 700, color: '#e53e3e', marginBottom: '4px' }}>
-                       {activeMetrics.timeoutRate}%
-                    </div>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.7 }}>Timeout Error Rate</div>
-                 </div>
-              </div>
-           </div>
+          <div className="content-card-header">
+            <h2>Active Scope</h2>
+          </div>
+          <div className="content-card-body">
+            <div style={{ fontSize: '14px' }}>
+              Viewing: <strong>{selectedCourseId === 'ALL' ? 'All Courses' : metrics.find((metric) => String(metric.course.id) === selectedCourseId)?.course.name || 'Selected Course'}</strong>
+            </div>
+            <p style={{ marginTop: '12px', fontSize: '12px', color: '#666' }}>
+              These metrics are computed from the latest teacher dashboard rows returned by the backend, not from mock analytics.
+            </p>
+          </div>
         </div>
-
       </div>
     </div>
   );

@@ -35,8 +35,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, navItems, p
     }
   }, [isDarkMode]);
 
-  const handleLogout = () => {
-    logout();
+  const handleAuthAction = () => {
+    if (user) {
+      logout();
+    }
     navigate('/auth');
   };
 
@@ -115,13 +117,18 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, navItems, p
 
         {/* User section at bottom */}
         <div className="dash-sidebar-footer">
-          <button className="dash-logout-btn" onClick={handleLogout} title="Logout" id="logout-btn">
+          <button
+            className="dash-logout-btn"
+            onClick={handleAuthAction}
+            title={user ? 'Logout' : 'Sign In'}
+            id="logout-btn"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            {!sidebarCollapsed && <span>Logout</span>}
+            {!sidebarCollapsed && <span>{user ? 'Logout' : 'Sign In'}</span>}
           </button>
         </div>
       </aside>
@@ -152,11 +159,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, navItems, p
             </button>
             <div
               className="dash-navbar-profile"
-              onClick={() => navigate(`/${(user?.role || 'student').toLowerCase()}/profile`)}
-              title="Go to Profile"
+              onClick={() => navigate(user ? `/${user.role.toLowerCase()}/profile` : '/auth')}
+              title={user ? 'Go to Profile' : 'Sign In'}
             >
               <div className="dash-user-avatar" style={{ background: getRoleBadge(user?.role || '') }}>
-                {user ? getInitials(user.name) : '??'}
+                {user ? getInitials(user.name) : 'GU'}
               </div>
             </div>
           </div>

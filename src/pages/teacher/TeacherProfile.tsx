@@ -1,106 +1,191 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { courseApi, userApi } from '../../api';
 import { useAuth } from '../../contexts';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { filterCoursesByTeacher, getInitials } from '../../utils/queryme';
 
 const TeacherProfile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateCurrentUser } = useAuth();
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [password, setPassword] = useState('');
+  const [courses, setCourses] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadProfile = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [teachers, allCourses] = await Promise.all([
+          userApi.getTeachers(controller.signal),
+          courseApi.getCourses(controller.signal),
+        ]);
+
+        const teacher = teachers.find((candidate) => String(candidate.id) === user.id || candidate.email === user.email);
+        const ownedCourses = filterCoursesByTeacher(allCourses, user.id).map((course) => ({
+          id: String(course.id),
+          name: course.name,
+        }));
+
+        if (!controller.signal.aborted) {
+          setName(String(teacher?.name || teacher?.fullName || user.name));
+          setEmail(String(teacher?.email || user.email));
+          setCourses(ownedCourses);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Unable to load your teacher profile.'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => controller.abort();
+  }, [user]);
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user) {
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await userApi.updateTeacher(user.id, {
+        fullName: name,
+        email,
+        ...(password ? { password } : {}),
+      });
+
+      updateCurrentUser({ ...user, name, email });
+      setPassword('');
+      setSuccess('Your teacher profile has been updated.');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to update your teacher profile.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header">
+          <h1>My Profile</h1>
+          <p>Loading your teacher profile.</p>
+        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Loading profile...</div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="page-header">
         <h1>My Profile</h1>
-        <p>Manage your account settings and preferences</p>
+        <p>Manage your teacher account details and the courses linked to your profile.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
-        {/* Profile Card */}
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '18px' }}>
         <div className="content-card">
           <div className="profile-card-body">
-            <div className="profile-avatar">
-              {user?.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-            </div>
-            <h3 className="profile-name">{user?.name}</h3>
-            <p className="profile-email">{user?.email}</p>
-            <span className="badge badge-purple">{user?.role}</span>
-
+            <div className="profile-avatar">{getInitials(name)}</div>
+            <h3 className="profile-name">{name}</h3>
+            <p className="profile-email">{email}</p>
+            <span className="badge badge-green">{user?.role}</span>
             <div className="profile-meta-container">
               <div className="profile-meta-row">
                 <span className="profile-meta-label">Teacher ID</span>
-                <strong className="profile-meta-value">TCH-{user?.id?.toString().padStart(4, '0') || '0002'}</strong>
+                <strong className="profile-meta-value">{user?.id}</strong>
               </div>
               <div className="profile-meta-row">
-                <span className="profile-meta-label">Department</span>
-                <strong className="profile-meta-value">Computer Science</strong>
-              </div>
-              <div className="profile-meta-row">
-                <span className="profile-meta-label">Joined</span>
-                <strong className="profile-meta-value">Aug 20, 2023</strong>
-              </div>
-              <div className="profile-meta-row">
-                <span className="profile-meta-label">Status</span>
-                <span className="badge badge-green">Active</span>
+                <span className="profile-meta-label">Courses</span>
+                <strong className="profile-meta-value">{courses.length}</strong>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Settings */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div className="content-card">
             <div className="content-card-header">
               <h2>Account Information</h2>
-              <button className="btn btn-secondary btn-sm">Edit</button>
             </div>
             <div className="content-card-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-                <div>
-                  <label className="profile-info-label">Full Name</label>
-                  <div className="profile-info-value">{user?.name}</div>
+              <form onSubmit={handleSave}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                  <div>
+                    <label className="profile-info-label">Full Name</label>
+                    <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label className="profile-info-label">Email</label>
+                    <input className="form-input" value={email} onChange={(event) => setEmail(event.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="profile-info-label">New Password</label>
+                    <input type="password" className="form-input" value={password} onChange={(event) => setPassword(event.target.value)} style={{ width: '100%' }} />
+                  </div>
                 </div>
-                <div>
-                  <label className="profile-info-label">Email</label>
-                  <div className="profile-info-value">{user?.email}</div>
+
+                {error && <div style={{ marginTop: '14px', color: '#e53e3e', fontSize: '12px' }}>{error}</div>}
+                {success && <div style={{ marginTop: '14px', color: '#38a169', fontSize: '12px' }}>{success}</div>}
+
+                <div style={{ marginTop: '18px' }}>
+                  <button className="btn btn-primary" type="submit" disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Profile'}
+                  </button>
                 </div>
-                <div>
-                  <label className="profile-info-label">Role</label>
-                  <div className="profile-info-value">TEACHER</div>
-                </div>
-                <div>
-                  <label className="profile-info-label">Password</label>
-                  <div className="profile-info-value">••••••••</div>
-                </div>
-              </div>
+              </form>
             </div>
           </div>
 
           <div className="content-card">
             <div className="content-card-header">
-              <h2>Courses Taught</h2>
+              <h2>Courses</h2>
             </div>
-            <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
-              <table className="data-table" style={{ minWidth: '400px' }}>
-                <colgroup>
-                  <col style={{ width: '50%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '25%' }} />
-                </colgroup>
+            <div className="content-card-body" style={{ padding: 0 }}>
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>Course Name</th>
-                    <th>Students</th>
-                    <th>Status</th>
+                    <th>Course ID</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td className="profile-meta-value">Database Systems 101</td>
-                    <td className="profile-meta-label">32 Enrolled</td>
-                    <td><span className="badge badge-green">Active</span></td>
-                  </tr>
-                  <tr>
-                    <td className="profile-meta-value">Data Management 201</td>
-                    <td className="profile-meta-label">18 Enrolled</td>
-                    <td><span className="badge badge-gray">Draft</span></td>
-                  </tr>
+                  {courses.map((course) => (
+                    <tr key={course.id}>
+                      <td>{course.name}</td>
+                      <td>{course.id}</td>
+                    </tr>
+                  ))}
+                  {courses.length === 0 && (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                        No linked courses were returned for your profile.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
