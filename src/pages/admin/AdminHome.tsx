@@ -1,60 +1,98 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const mockSystemHealth = [
-  { service: 'Auth Module', status: 'Healthy', uptime: '99.99%', load: '12%' },
-  { service: 'Database (QueryMe App)', status: 'Healthy', uptime: '99.98%', load: '45%' },
-  { service: 'Sandbox DB (Student Exec)', status: 'Healthy', uptime: '99.95%', load: '78%' },
-  { service: 'Query Engine Execution', status: 'Warning', uptime: '98.50%', load: '92%' },
-];
+import { courseApi, examApi, resultApi, userApi, type Exam, type PlatformUser, type TeacherResultRow } from '../../api';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { getCourseName, normalizeRole } from '../../utils/queryme';
 
 const AdminHome: React.FC = () => {
   const navigate = useNavigate();
+  const [users, setUsers] = useState<PlatformUser[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [recentRows, setRecentRows] = useState<TeacherResultRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadOverview = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [admins, teachers, students, guests, courses] = await Promise.all([
+          userApi.getAdmins(controller.signal).catch(() => [] as PlatformUser[]),
+          userApi.getTeachers(controller.signal).catch(() => [] as PlatformUser[]),
+          userApi.getStudents(controller.signal).catch(() => [] as PlatformUser[]),
+          userApi.getGuests(controller.signal).catch(() => [] as PlatformUser[]),
+          courseApi.getCourses(controller.signal),
+        ]);
+
+        const examLists = await Promise.all(
+          courses.map((course) => examApi.getExamsByCourse(String(course.id), controller.signal).catch(() => [] as Exam[])),
+        );
+
+        const allExams = examLists.flat();
+        const dashboards = await Promise.all(
+          allExams.map((exam) => resultApi.getExamDashboard(String(exam.id), controller.signal).catch(() => [] as TeacherResultRow[])),
+        );
+
+        if (!controller.signal.aborted) {
+          setUsers([...admins, ...teachers, ...students, ...guests]);
+          setExams(allExams);
+          setRecentRows(
+            dashboards
+              .flat()
+              .sort((left, right) => new Date(right.submittedAt || 0).getTime() - new Date(left.submittedAt || 0).getTime())
+              .slice(0, 6),
+          );
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load the admin overview.'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadOverview();
+    return () => controller.abort();
+  }, []);
+
+  const roleCounts = useMemo(() => ({
+    students: users.filter((user) => normalizeRole(typeof user.role === 'string' ? user.role : undefined, user.roles) === 'STUDENT').length,
+    teachers: users.filter((user) => normalizeRole(typeof user.role === 'string' ? user.role : undefined, user.roles) === 'TEACHER').length,
+    admins: users.filter((user) => normalizeRole(typeof user.role === 'string' ? user.role : undefined, user.roles) === 'ADMIN').length,
+    guests: users.filter((user) => normalizeRole(typeof user.role === 'string' ? user.role : undefined, user.roles) === 'GUEST').length,
+  }), [users]);
+
+  if (loading) {
+    return <div style={{ padding: '24px' }}>Loading admin dashboard...</div>;
+  }
 
   return (
     <div>
       <div className="page-header">
         <h1>Admin Dashboard</h1>
-        <p>Manage users, system health, and oversee all platform activities</p>
+        <p>Administrative overview built from real backend users, courses, exams, and result data.</p>
       </div>
 
-      {/* Global Stats Matrix */}
+      {error && <div style={{ marginBottom: '16px', color: '#e53e3e' }}>{error}</div>}
+
       <div className="stat-grid" style={{ marginBottom: '28px' }}>
-        <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(229, 62, 62, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e53e3e" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>
-          </div>
-          <div className="stat-card-value">156</div>
-          <div className="stat-card-label">Total Users</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(56, 161, 105, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38a169" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-          </div>
-          <div className="stat-card-value">42</div>
-          <div className="stat-card-label">Active Exams</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(49, 130, 206, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3182ce" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>
-          </div>
-          <div className="stat-card-value">8</div>
-          <div className="stat-card-label">Active Sandboxes</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-icon" style={{ background: 'rgba(221, 107, 32, 0.1)' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dd6b20" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-          </div>
-          <div className="stat-card-value">1,247</div>
-          <div className="stat-card-label">Total Submissions</div>
-        </div>
+        <div className="stat-card"><div className="stat-card-value">{users.length}</div><div className="stat-card-label">Total Users</div></div>
+        <div className="stat-card"><div className="stat-card-value">{exams.length}</div><div className="stat-card-label">Total Exams</div></div>
+        <div className="stat-card"><div className="stat-card-value">{exams.filter((exam) => String(exam.status || '').toUpperCase() === 'PUBLISHED').length}</div><div className="stat-card-label">Published Exams</div></div>
+        <div className="stat-card"><div className="stat-card-value">{recentRows.length}</div><div className="stat-card-label">Recent Result Rows</div></div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px' }}>
-        {/* User Distribution */}
         <div className="content-card">
           <div className="content-card-header">
-            <h2>👥 User Distribution</h2>
+            <h2>User Distribution</h2>
             <button className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/users')}>Manage Users</button>
           </div>
           <div className="content-card-body" style={{ padding: 0 }}>
@@ -63,66 +101,80 @@ const AdminHome: React.FC = () => {
                 <tr>
                   <th>Role</th>
                   <th>Count</th>
-                  <th>Active Ratio</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    <span className="badge badge-purple">Students</span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>128</td>
-                  <td style={{ color: '#888' }}>95% Active</td>
-                </tr>
-                <tr>
-                  <td>
-                    <span className="badge badge-blue">Teachers</span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>24</td>
-                  <td style={{ color: '#888' }}>100% Active</td>
-                </tr>
-                <tr>
-                  <td>
-                    <span className="badge badge-red">Admins</span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>4</td>
-                  <td style={{ color: '#888' }}>100% Active</td>
-                </tr>
+                <tr><td>Students</td><td>{roleCounts.students}</td></tr>
+                <tr><td>Teachers</td><td>{roleCounts.teachers}</td></tr>
+                <tr><td>Admins</td><td>{roleCounts.admins}</td></tr>
+                <tr><td>Guests</td><td>{roleCounts.guests}</td></tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* System Health */}
         <div className="content-card">
           <div className="content-card-header">
-            <h2>⚙️ System Health Dashboard</h2>
-            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/settings')}>View Nodes</button>
+            <h2>Recent Exam Activity</h2>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/reports')}>View Reports</button>
           </div>
           <div className="content-card-body" style={{ padding: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Service Module</th>
-                  <th>Status</th>
-                  <th>Uptime / Load</th>
+                  <th>Student</th>
+                  <th>Question</th>
+                  <th>Score</th>
                 </tr>
               </thead>
               <tbody>
-                {mockSystemHealth.map((sys, idx) => (
-                  <tr key={idx}>
-                    <td style={{ fontWeight: 600 }}>{sys.service}</td>
-                    <td>
-                      <span className={`badge ${sys.status === 'Healthy' ? 'badge-green' : 'badge-orange'}`}>
-                        {sys.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '11px', color: '#666' }}>{sys.uptime} uptime</div>
-                      <div style={{ fontSize: '11px', color: '#888' }}>{sys.load} load</div>
-                    </td>
+                {recentRows.map((row, index) => (
+                  <tr key={`${row.sessionId}-${row.questionId}-${index}`}>
+                    <td>{row.studentName || row.studentId}</td>
+                    <td>{row.questionPrompt || row.questionId}</td>
+                    <td>{row.score ?? 0}/{row.maxScore ?? 0}</td>
                   </tr>
                 ))}
+                {recentRows.length === 0 && (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                      No recent result activity was returned yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="content-card" style={{ gridColumn: '1 / -1' }}>
+          <div className="content-card-header">
+            <h2>Course Exam Coverage</h2>
+          </div>
+          <div className="content-card-body" style={{ padding: 0 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Exam</th>
+                  <th>Course</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exams.map((exam) => (
+                  <tr key={String(exam.id)}>
+                    <td>{exam.title}</td>
+                    <td>{getCourseName(exam.course, exam.courseId)}</td>
+                    <td>{String(exam.status || 'N/A')}</td>
+                  </tr>
+                ))}
+                {exams.length === 0 && (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                      No exams were returned from the course catalog.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

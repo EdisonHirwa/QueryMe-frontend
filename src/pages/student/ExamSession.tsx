@@ -1,243 +1,260 @@
 /* eslint-disable react-x/no-array-index-key */
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { examApi, questionApi, sessionApi, queryApi, Exam, ExamSession as ApiSession } from '../../services/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { examApi, questionApi, queryApi, sessionApi, type Exam, type QuerySubmissionResponse, type Session } from '../../api';
+import { useAuth } from '../../contexts';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { getCourseName, getExamTimeLimit, getSessionRemainingMs, isSessionComplete } from '../../utils/queryme';
 import './ExamSession.css';
 
-interface Question {
+interface QuestionViewModel {
   id: string;
   number: number;
   prompt: string;
   marks: number;
-  submitted: boolean;
-  answer?: string;
+}
+
+interface SubmissionFeedback {
+  visible: boolean;
+  score?: number;
+  isCorrect?: boolean;
+  resultColumns?: string[];
+  resultRows?: unknown[][];
+  message?: string;
 }
 
 const ExamSession: React.FC = () => {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [exam, setExam] = useState<Exam | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [session, setSession] = useState<ApiSession | null>(null);
+  const [questions, setQuestions] = useState<QuestionViewModel[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentQ, setCurrentQ] = useState(0);
-  const [sqlCode, setSqlCode] = useState('');
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [submittedQs, setSubmittedQs] = useState<Set<string>>(() => new Set());
-  const [queryResult, setQueryResult] = useState<string[][] | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({});
+  const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
+  const [feedbackByQuestion, setFeedbackByQuestion] = useState<Record<string, SubmissionFeedback>>({});
   const [queryError, setQueryError] = useState('');
-  const [isRunning, setIsRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [isSubmittingQuery, setIsSubmittingQuery] = useState(false);
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [timeLeftMs, setTimeLeftMs] = useState(0);
+  const autoSubmitRef = useRef(false);
 
-  // Load exam and start session
   useEffect(() => {
-    const loadExam = async () => {
-      if (!examId) {
-        setError('Invalid exam ID');
+    const controller = new AbortController();
+
+    const loadSession = async () => {
+      if (!examId || !user) {
+        setError('A valid exam session requires both an exam and a signed-in student.');
         setLoading(false);
         return;
       }
 
-      try {
-        setLoading(true);
+      setLoading(true);
+      setError(null);
 
-        // First check if user is authenticated
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('Authentication required. Please log in again.');
-          setLoading(false);
+      try {
+        const [loadedExam, loadedQuestions, studentSessions] = await Promise.all([
+          examApi.getExam(examId, controller.signal),
+          questionApi.getQuestions(examId, controller.signal),
+          sessionApi.getSessionsByStudent(user.id, controller.signal),
+        ]);
+
+        if (controller.signal.aborted) {
           return;
         }
 
-        // Fetch exam details
-        const examData = await examApi.getExam(examId);
-        setExam(examData);
+        const existingSession = studentSessions.find(
+          (candidate) => String(candidate.examId) === examId && !isSessionComplete(candidate),
+        );
 
-        // Fetch questions
-        const questionsData = await questionApi.getQuestions(examId);
-        const transformedQuestions: Question[] = questionsData.map((q, index) => ({
-          id: q.id,
-          number: index + 1,
-          prompt: q.prompt,
-          marks: q.marks,
-          submitted: false,
-          answer: '',
-        }));
-        setQuestions(transformedQuestions);
+        const liveSession = existingSession || await sessionApi.startSession(
+          { examId, studentId: user.id },
+          controller.signal,
+        );
 
-        // Start or resume exam session
-        const userStr = localStorage.getItem('queryme_user');
-        const studentId = userStr ? JSON.parse(userStr).id : undefined;
-
-        if (!studentId) {
-          throw new Error('Unable to determine student identity. Please log in again.');
+        if (controller.signal.aborted) {
+          return;
         }
 
-        const studentSessions = await sessionApi.getSessionsByStudent(studentId);
-        const existingSession = studentSessions.find(s => s.examId === examId);
-
-        const sessionData = existingSession
-          ? existingSession
-          : await sessionApi.startSession(examId, studentId);
-
-        setSession(sessionData);
-
-        // Set timer
-        const timeLimitSeconds = (examData.timeLimit || examData.timeLimitMins || 60) * 60;
-        setTimeLeft(timeLimitSeconds);
-
-        // Load existing answers if session was already started
-        if (sessionData.answers) {
-          setAnswers(sessionData.answers);
-          setSubmittedQs(new Set(Object.keys(sessionData.answers)));
-        }
-
+        setExam(loadedExam);
+        setQuestions(
+          loadedQuestions.map((question, index) => ({
+            id: String(question.id),
+            number: index + 1,
+            prompt: question.prompt,
+            marks: question.marks,
+          })),
+        );
+        setSession(liveSession);
+        setTimeLeftMs(getSessionRemainingMs(liveSession));
       } catch (err) {
-        console.error('Exam loading error:', err);
-        let errorMessage = 'Failed to load exam';
-        
-        if (err instanceof Error) {
-          if (err.message.includes('404') || err.message.includes('Not Found')) {
-            errorMessage = 'Exam not found. It may have been deleted or you may not have access.';
-          } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
-            errorMessage = 'You do not have permission to access this exam.';
-          } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
-            errorMessage = 'Your session has expired. Please log in again.';
-          } else if (err.message.includes('Failed to fetch')) {
-            errorMessage = 'Cannot connect to the server. Please check your internet connection.';
-          } else {
-            errorMessage = err.message;
-          }
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load this exam session.'));
         }
-        
-        setError(errorMessage);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    loadExam();
-  }, [examId]);
+    void loadSession();
 
-  const current = questions[currentQ];
+    return () => controller.abort();
+  }, [examId, user]);
 
-  // Timer countdown
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 0) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    if (!session?.expiresAt || isSessionComplete(session)) {
+      return undefined;
+    }
 
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const interval = window.setInterval(() => {
+      const remaining = getSessionRemainingMs(session);
+      setTimeLeftMs(remaining);
+
+      if (remaining <= 0 && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+        void sessionApi.submitSession(String(session.id))
+          .then(() => navigate('/student/results'))
+          .catch(() => {
+            setError('Your session reached its time limit and the auto-submit call failed. Please submit manually if the session is still open.');
+          });
+      }
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [navigate, session]);
+
+  const currentQuestion = questions[currentIndex];
+  const currentSql = currentQuestion ? (draftAnswers[currentQuestion.id] || '') : '';
+  const currentFeedback = currentQuestion ? feedbackByQuestion[currentQuestion.id] : undefined;
+
+  const answeredCount = useMemo(
+    () => Object.values(draftAnswers).filter((value) => value.trim()).length,
+    [draftAnswers],
+  );
+
+  const totalMarks = useMemo(
+    () => questions.reduce((sum, question) => sum + question.marks, 0),
+    [questions],
+  );
+
+  const saveDraft = (questionId: string, nextValue: string) => {
+    setDraftAnswers((previous) => ({
+      ...previous,
+      [questionId]: nextValue,
+    }));
+  };
+
+  const switchQuestion = (nextIndex: number) => {
+    setCurrentIndex(nextIndex);
+    setQueryError('');
+  };
+
+  const formatTime = (remainingMs: number) => {
+    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const getTimerColor = () => {
-    if (timeLeft <= 300) return '#e53e3e';
-    if (timeLeft <= 900) return '#dd6b20';
+    if (timeLeftMs <= 5 * 60 * 1000) {
+      return '#e53e3e';
+    }
+    if (timeLeftMs <= 15 * 60 * 1000) {
+      return '#dd6b20';
+    }
     return '#38a169';
   };
 
-  // Switch question
-  const switchQuestion = useCallback((idx: number) => {
-    // Save current answer
-    if (current) {
-      setAnswers(prev => ({ ...prev, [current.id]: sqlCode }));
+  const getResultTable = (feedback?: SubmissionFeedback) => {
+    if (!feedback?.resultColumns?.length || !feedback.resultRows?.length) {
+      return null;
     }
-    setCurrentQ(idx);
-    setSqlCode(answers[questions[idx].id] || '');
-    setQueryResult(null);
-    setQueryError('');
-  }, [current, sqlCode, answers, questions]);
 
-  // Run query
-  const runQuery = async () => {
-    if (!sqlCode.trim()) {
-      setQueryError('Please write a SQL query first.');
+    return [feedback.resultColumns, ...feedback.resultRows.map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? '')) : []))];
+  };
+
+  const submitCurrentQuery = async () => {
+    if (!examId || !currentQuestion || !session || !user) {
       return;
     }
-    if (!examId || !current?.id) return;
 
-    setIsRunning(true);
+    if (!currentSql.trim()) {
+      setQueryError('Write a SQL statement before submitting.');
+      return;
+    }
+
+    setIsSubmittingQuery(true);
     setQueryError('');
-    setQueryResult(null);
 
     try {
-      const result = await queryApi.submitQuery({
-        query: sqlCode,
+      const response = await queryApi.submitQuery({
+        sessionId: session.id,
         examId,
-        questionId: current.id,
+        questionId: currentQuestion.id,
+        studentId: user.id,
+        query: currentSql,
       });
 
-      if (result.success && result.data) {
-        // Convert data to table format
-        if (Array.isArray(result.data) && result.data.length > 0) {
-          const headers = Object.keys(result.data[0]);
-          const rows = result.data.map(row =>
-            headers.map(header => String(row[header] || ''))
-          );
-          setQueryResult([headers, ...rows]);
-        } else {
-          setQueryResult([['Result'], ['Query executed successfully']]);
-        }
-      } else {
-        setQueryError(result.error || 'Query execution failed');
+      const feedback = normalizeFeedback(response);
+
+      setSubmittedQuestions((previous) => new Set(previous).add(currentQuestion.id));
+      setFeedbackByQuestion((previous) => ({
+        ...previous,
+        [currentQuestion.id]: feedback,
+      }));
+
+      if (response.executionError) {
+        setQueryError(response.executionError);
       }
     } catch (err) {
-      setQueryError(err instanceof Error ? err.message : 'Failed to execute query');
+      setQueryError(extractErrorMessage(err, 'Failed to submit your query.'));
     } finally {
-      setIsRunning(false);
+      setIsSubmittingQuery(false);
     }
   };
 
-  // Submit answer for current question
-  const submitAnswer = () => {
-    const newAnswers = { ...answers, [current.id]: sqlCode };
-    setAnswers(newAnswers);
-    setSubmittedQs(prev => new Set([...prev, current.id]));
-  };
-
-  // Submit entire exam
   const submitExam = async () => {
-    if (!session?.id) return;
+    if (!session) {
+      return;
+    }
+
+    setIsSubmittingExam(true);
+    setError(null);
 
     try {
-      await sessionApi.submitSession(session.id, answers);
-      setShowConfirmSubmit(false);
+      await sessionApi.submitSession(String(session.id));
       navigate('/student/results');
     } catch (err) {
-      alert('Failed to submit exam: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError(extractErrorMessage(err, 'Failed to submit your exam session.'));
+    } finally {
+      setIsSubmittingExam(false);
+      setShowConfirmSubmit(false);
     }
   };
 
   if (loading) {
     return (
       <div className="exam-session">
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div>Loading exam...</div>
-        </div>
+        <div style={{ textAlign: 'center', padding: '40px' }}>Loading exam session...</div>
       </div>
     );
   }
 
-  if (error || !exam) {
+  if (error || !exam || !currentQuestion) {
     return (
       <div className="exam-session">
         <div style={{ textAlign: 'center', padding: '40px', color: 'red' }}>
-          <div>Error: {error || 'Exam not found'}</div>
-          <button className="btn btn-primary" onClick={() => navigate('/student/exams')}>
+          <div>{error || 'This exam session is unavailable.'}</div>
+          <button className="btn btn-primary" onClick={() => navigate('/student/exams')} style={{ marginTop: '18px' }}>
             Back to Exams
           </button>
         </div>
@@ -245,143 +262,138 @@ const ExamSession: React.FC = () => {
     );
   }
 
-  const totalMarks = questions.reduce((a, q) => a + q.marks, 0);
-  const answeredCount = Object.keys(answers).filter(k => answers[k]?.trim()).length;
+  const resultTable = getResultTable(currentFeedback);
 
   return (
     <div className="exam-session">
-      {/* Exam Header */}
       <div className="exam-header">
         <div className="exam-header-left">
           <h1 className="exam-title">{exam.title}</h1>
           <div className="exam-meta">
-            <span>📚 {exam.course?.name || 'Unknown Course'}</span>
-            <span>👤 {exam.teacher?.name || 'Unknown Teacher'}</span>
+            <span>📚 {getCourseName(exam.course, exam.courseId)}</span>
             <span>📝 {questions.length} Questions</span>
             <span>💯 {totalMarks} Marks</span>
+            <span>⏱ {getExamTimeLimit(exam) || 'N/A'} mins</span>
           </div>
         </div>
         <div className="exam-header-right">
           <div className="exam-timer" style={{ color: getTimerColor(), borderColor: getTimerColor() }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-            </svg>
-            {formatTime(timeLeft)}
+            {formatTime(timeLeftMs)}
           </div>
           <div className="exam-progress">
-            <span className="exam-progress-text">{answeredCount}/{questions.length} answered</span>
+            <span className="exam-progress-text">{answeredCount}/{questions.length} drafted</span>
             <div className="exam-progress-bar">
               <div className="exam-progress-fill" style={{ width: `${(answeredCount / questions.length) * 100}%` }} />
             </div>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowConfirmSubmit(true)}>
-            Submit Exam
+          <button className="btn btn-primary btn-sm" onClick={() => setShowConfirmSubmit(true)} disabled={isSubmittingExam}>
+            {isSubmittingExam ? 'Submitting...' : 'Submit Exam'}
           </button>
         </div>
       </div>
 
       <div className="exam-body">
-        {/* Question sidebar */}
         <div className="exam-question-nav">
           <div className="exam-qnav-title">Questions</div>
           <div className="exam-qnav-grid">
-            {questions.map((q, i) => (
+            {questions.map((question, index) => (
               <button
-                key={q.id}
-                className={`exam-qnav-btn ${i === currentQ ? 'current' : ''} ${submittedQs.has(q.id) ? 'submitted' : ''} ${answers[q.id]?.trim() ? 'answered' : ''}`}
-                onClick={() => switchQuestion(i)}
+                key={question.id}
+                className={`exam-qnav-btn ${index === currentIndex ? 'current' : ''} ${submittedQuestions.has(question.id) ? 'submitted' : ''} ${draftAnswers[question.id]?.trim() ? 'answered' : ''}`}
+                onClick={() => switchQuestion(index)}
               >
-                {q.number}
+                {question.number}
               </button>
             ))}
           </div>
-          <div className="exam-qnav-legend">
-            <div><span className="legend-dot current" />Current</div>
-            <div><span className="legend-dot answered" />Answered</div>
-            <div><span className="legend-dot submitted" />Submitted</div>
-            <div><span className="legend-dot" />Not answered</div>
-          </div>
         </div>
 
-        {/* Main exam area */}
         <div className="exam-workspace">
-          {/* Question prompt */}
           <div className="exam-question-card">
             <div className="exam-question-header">
-              <span className="exam-question-num">Question {current.number}</span>
-              <span className="badge badge-purple">{current.marks} marks</span>
+              <span className="exam-question-num">Question {currentQuestion.number}</span>
+              <span className="badge badge-purple">{currentQuestion.marks} marks</span>
             </div>
-            <p className="exam-question-text">{current.prompt}</p>
+            <p className="exam-question-text">{currentQuestion.prompt}</p>
           </div>
 
-          {/* SQL Editor */}
           <div className="exam-editor-card">
             <div className="exam-editor-header">
               <span>SQL Editor</span>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-secondary btn-sm" onClick={runQuery} disabled={isRunning}>
-                  {isRunning ? '⏳ Running...' : '▶ Run Query'}
+                <button className="btn btn-secondary btn-sm" onClick={() => saveDraft(currentQuestion.id, currentSql)} disabled={!currentSql.trim()}>
+                  Save Draft
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={submitAnswer} disabled={!sqlCode.trim()}>
-                  ✓ Submit Answer
+                <button className="btn btn-primary btn-sm" onClick={submitCurrentQuery} disabled={isSubmittingQuery}>
+                  {isSubmittingQuery ? 'Submitting...' : 'Submit Query'}
                 </button>
               </div>
             </div>
             <div className="exam-editor-area">
               <div className="exam-editor-gutter">
-                {sqlCode.split('\n').map((_, i) => (
-                  <div key={`line-${i}`} className="exam-line-num">{i + 1}</div>
+                {currentSql.split('\n').map((_, index) => (
+                  <div key={`line-${index}`} className="exam-line-num">{index + 1}</div>
                 ))}
-                {sqlCode.split('\n').length === 0 && <div className="exam-line-num">1</div>}
               </div>
               <textarea
                 className="exam-textarea"
-                value={sqlCode}
-                onChange={(e) => setSqlCode(e.target.value)}
+                value={currentSql}
+                onChange={(event) => saveDraft(currentQuestion.id, event.target.value)}
                 placeholder="-- Write your SQL query here..."
                 spellCheck={false}
               />
             </div>
-            {submittedQs.has(current.id) && (
-              <div className="exam-submitted-badge">✓ Answer submitted for this question</div>
+            {submittedQuestions.has(currentQuestion.id) && (
+              <div className="exam-submitted-badge">Submission recorded for this question.</div>
             )}
           </div>
 
-          {/* Results panel */}
           <div className="exam-results-card">
             <div className="exam-results-header">
-              <span>Query Results</span>
-              {queryResult && <span className="badge badge-green">{queryResult.length - 1} row(s)</span>}
+              <span>Submission Feedback</span>
+              {currentFeedback?.visible && typeof currentFeedback.score === 'number' && (
+                <span className="badge badge-green">Score: {currentFeedback.score}</span>
+              )}
             </div>
             <div className="exam-results-body">
               {queryError && (
                 <div className="exam-results-error">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
                   {queryError}
                 </div>
               )}
-              {queryResult && (
+
+              {!queryError && currentFeedback?.message && (
+                <div className="exam-results-empty">
+                  <p>{currentFeedback.message}</p>
+                </div>
+              )}
+
+              {resultTable && (
                 <div className="exam-results-table-wrap">
                   <table className="exam-results-table">
                     <thead>
                       <tr>
-                        {queryResult[0].map((col, i) => <th key={`header-${i}`}>{col}</th>)}
+                        {resultTable[0].map((column, index) => (
+                          <th key={`header-${index}`}>{column}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {queryResult.slice(1).map((row, ri) => (
-                        <tr key={`row-${ri}`}>
-                          {row.map((cell, ci) => <td key={`cell-${ci}`}>{cell}</td>)}
+                      {resultTable.slice(1).map((row, rowIndex) => (
+                        <tr key={`row-${rowIndex}`}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={`cell-${cellIndex}`}>{cell}</td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
-              {!queryResult && !queryError && (
+
+              {!queryError && !currentFeedback && (
                 <div className="exam-results-empty">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
-                  <p>Run your query to see results here</p>
+                  <p>Submit a query to receive grading feedback for this question.</p>
                 </div>
               )}
             </div>
@@ -389,24 +401,49 @@ const ExamSession: React.FC = () => {
         </div>
       </div>
 
-      {/* Confirm submit modal */}
       {showConfirmSubmit && (
         <div className="exam-modal-overlay">
           <div className="exam-modal">
-            <h3>Submit Exam?</h3>
-            <p>You have answered <strong>{answeredCount}</strong> out of <strong>{questions.length}</strong> questions.</p>
-            {answeredCount < questions.length && (
-              <p style={{ color: '#e53e3e', fontSize: '12px' }}>⚠ You have {questions.length - answeredCount} unanswered question(s).</p>
-            )}
+            <h3>Submit exam?</h3>
+            <p>You have drafted answers for <strong>{answeredCount}</strong> out of <strong>{questions.length}</strong> questions.</p>
             <div className="exam-modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowConfirmSubmit(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={submitExam}>Submit Exam</button>
+              <button className="btn btn-primary" onClick={submitExam} disabled={isSubmittingExam}>
+                {isSubmittingExam ? 'Submitting...' : 'Submit Exam'}
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
+};
+
+const normalizeFeedback = (response: QuerySubmissionResponse): SubmissionFeedback => {
+  if (response.executionError) {
+    return {
+      visible: false,
+      message: response.executionError,
+    };
+  }
+
+  if (response.resultsVisible === false) {
+    return {
+      visible: false,
+      message: 'Your query was submitted successfully. Detailed results are hidden until the exam visibility rules allow them.',
+    };
+  }
+
+  return {
+    visible: true,
+    score: response.score,
+    isCorrect: response.isCorrect,
+    resultColumns: response.resultColumns || [],
+    resultRows: response.resultRows || [],
+    message: response.resultColumns?.length || response.resultRows?.length
+      ? undefined
+      : 'Submission saved. No tabular rows were returned for display.',
+  };
 };
 
 export default ExamSession;

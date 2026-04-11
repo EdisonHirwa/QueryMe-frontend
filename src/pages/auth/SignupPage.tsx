@@ -3,7 +3,7 @@ import logo from '../../assets/logo.png';
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
-  onSignup: (name: string, email: string, password: string) => void;
+  onSignup: (fullName: string, email: string, password: string) => void;
 }
 
 const SignupPage: React.FC<SignupPageProps> = ({ onSwitchToLogin, onSignup }) => {

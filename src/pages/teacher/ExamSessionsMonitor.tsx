@@ -1,149 +1,207 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { courseApi, examApi, sessionApi, userApi, type Exam, type PlatformUser, type Session } from '../../api';
+import { useAuth } from '../../contexts';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { filterCoursesByTeacher, isSessionComplete } from '../../utils/queryme';
 import './TeacherPages.css';
 
 type SessionStatus = 'in_progress' | 'submitted' | 'expired';
 
-interface ExamSession {
+interface SessionRow {
   id: string;
   studentName: string;
   studentEmail: string;
-  examTitle: string;
-  startedAt: Date;
-  submittedAt: Date | null;
-  expiresAt: Date;
+  startedAt: string;
+  submittedAt: string;
+  expiresAt: string;
   sandboxSchema: string;
   status: SessionStatus;
 }
 
-const mockSessions: ExamSession[] = [
-  { id: '1', studentName: 'Alice Johnson',  studentEmail: 'alice@uni.edu',   examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 22 * 60000), submittedAt: null,                       expiresAt: new Date(Date.now() + 68 * 60000), sandboxSchema: 'sandbox_a1b2', status: 'in_progress' },
-  { id: '2', studentName: 'Bob Williams',   studentEmail: 'bob@uni.edu',     examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 55 * 60000), submittedAt: new Date(Date.now() - 5 * 60000), expiresAt: new Date(Date.now() + 35 * 60000), sandboxSchema: 'sandbox_c3d4', status: 'submitted'  },
-  { id: '3', studentName: 'Carol Smith',    studentEmail: 'carol@uni.edu',   examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 18 * 60000), submittedAt: null,                       expiresAt: new Date(Date.now() + 72 * 60000), sandboxSchema: 'sandbox_e5f6', status: 'in_progress' },
-  { id: '4', studentName: 'Daniel Okafor',  studentEmail: 'daniel@uni.edu',  examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 91 * 60000), submittedAt: null,                       expiresAt: new Date(Date.now() - 1 * 60000),  sandboxSchema: 'sandbox_g7h8', status: 'expired'    },
-  { id: '5', studentName: 'Eva Martinez',   studentEmail: 'eva@uni.edu',     examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 40 * 60000), submittedAt: new Date(Date.now() - 12 * 60000),expiresAt: new Date(Date.now() + 50 * 60000), sandboxSchema: 'sandbox_i9j0', status: 'submitted'  },
-  { id: '6', studentName: 'Frank Chen',     studentEmail: 'frank@uni.edu',   examTitle: 'SQL Midterm – DB 101', startedAt: new Date(Date.now() - 5 * 60000),  submittedAt: null,                       expiresAt: new Date(Date.now() + 85 * 60000), sandboxSchema: 'sandbox_k1l2', status: 'in_progress' },
-];
-
-const fmt = (d: Date) =>
-  d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-const countdown = (expiresAt: Date, currentNowMs: number) => {
-  const diff = Math.max(0, Math.floor((expiresAt.getTime() - currentNowMs) / 1000));
-  const m = Math.floor(diff / 60);
-  const s = diff % 60;
-  return `${m}m ${s.toString().padStart(2, '0')}s`;
-};
-
-const elapsed = (startedAt: Date, currentNowMs: number) => {
-  const diff = Math.floor((currentNowMs - startedAt.getTime()) / 60000);
-  return `${diff}m ago`;
-};
-
-const statusConfig: Record<SessionStatus, { label: string; cls: string }> = {
-  in_progress: { label: '🟢 In Progress', cls: 'sess-status-active' },
-  submitted:   { label: '✅ Submitted',   cls: 'sess-status-submitted' },
-  expired:     { label: '🔴 Expired',     cls: 'sess-status-expired' },
-};
-
-type FilterType = 'all' | SessionStatus;
-
 const ExamSessionsMonitor: React.FC = () => {
-  const [sessions, setSessions] = useState<ExamSession[]>(mockSessions);
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const [lastRefresh, setLastRefresh] = useState(() => new Date());
+  const { user } = useAuth();
+  const [examOptions, setExamOptions] = useState<Exam[]>([]);
+  const [selectedExamId, setSelectedExamId] = useState('');
+  const [rows, setRows] = useState<SessionRow[]>([]);
+  const [studentsById, setStudentsById] = useState<Record<string, PlatformUser>>({});
+  const [loading, setLoading] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
 
-  // Tick every second to update countdowns
   useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(id);
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
-  const handleRefresh = () => {
-    setLastRefresh(new Date());
-    // In production: re-fetch from backend here
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadOptions = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [courses, students] = await Promise.all([
+          courseApi.getCourses(controller.signal),
+          userApi.getStudents(controller.signal),
+        ]);
+
+        const accessibleCourses = filterCoursesByTeacher(courses, user.id);
+        const examLists = await Promise.all(
+          accessibleCourses.map((course) => examApi.getExamsByCourse(String(course.id), controller.signal).catch(() => [] as Exam[])),
+        );
+
+        if (!controller.signal.aborted) {
+          const byId = Object.fromEntries(students.map((student) => [String(student.id), student]));
+          const exams = examLists.flat();
+          setStudentsById(byId);
+          setExamOptions(exams);
+          if (exams[0]) {
+            setSelectedExamId((previous) => previous || String(exams[0].id));
+          }
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load available exams or students.'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadOptions();
+    return () => controller.abort();
+  }, [user]);
+
+  useEffect(() => {
+    if (!selectedExamId) {
+      setRows([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingSessions(true);
+    setError(null);
+
+    void sessionApi.getSessionsByExam(selectedExamId, controller.signal)
+      .then((sessions) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setRows(
+          sessions.map((session) => {
+            const student = studentsById[String(session.studentId)];
+            return {
+              id: String(session.id),
+              studentName: String(student?.name || student?.fullName || session.studentId),
+              studentEmail: String(student?.email || 'No email'),
+              startedAt: session.startedAt || '',
+              submittedAt: session.submittedAt || '',
+              expiresAt: session.expiresAt || '',
+              sandboxSchema: String(session.sandboxSchema || 'N/A'),
+              status: getSessionStatus(session),
+            };
+          }),
+        );
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load exam sessions.'));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingSessions(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedExamId, studentsById]);
+
+  const counts = useMemo(() => ({
+    all: rows.length,
+    in_progress: rows.filter((row) => row.status === 'in_progress').length,
+    submitted: rows.filter((row) => row.status === 'submitted').length,
+    expired: rows.filter((row) => row.status === 'expired').length,
+  }), [rows]);
+
+  const forceSubmit = async (sessionId: string) => {
+    setError(null);
+
+    try {
+      await sessionApi.submitSession(sessionId);
+      const refreshed = await sessionApi.getSessionsByExam(selectedExamId);
+      setRows(
+        refreshed.map((session) => {
+          const student = studentsById[String(session.studentId)];
+          return {
+            id: String(session.id),
+            studentName: String(student?.name || student?.fullName || session.studentId),
+            studentEmail: String(student?.email || 'No email'),
+            startedAt: session.startedAt || '',
+            submittedAt: session.submittedAt || '',
+            expiresAt: session.expiresAt || '',
+            sandboxSchema: String(session.sandboxSchema || 'N/A'),
+            status: getSessionStatus(session),
+          };
+        }),
+      );
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to submit that active session.'));
+    }
   };
 
-  const handleForceSubmit = (id: string) => {
-    setSessions(prev =>
-      prev.map(s =>
-        s.id === id ? { ...s, status: 'submitted', submittedAt: new Date() } : s
-      )
-    );
-  };
-
-  const filtered = filter === 'all' ? sessions : sessions.filter(s => s.status === filter);
-  const counts = {
-    all:         sessions.length,
-    in_progress: sessions.filter(s => s.status === 'in_progress').length,
-    submitted:   sessions.filter(s => s.status === 'submitted').length,
-    expired:     sessions.filter(s => s.status === 'expired').length,
-  };
+  if (loading) {
+    return <div className="teacher-page" style={{ padding: '24px' }}>Loading sessions monitor...</div>;
+  }
 
   return (
     <div className="teacher-page" style={{ overflow: 'hidden' }}>
-      {/* Header */}
       <div className="builder-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <h1 className="builder-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38a169" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-            </svg>
-            Exam Sessions Monitor
-          </h1>
-          <span className="sess-live-dot" title="Live">
-            <span className="sess-live-pulse" />
-            LIVE
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '11px', color: '#888' }}>
-            Last refreshed: {fmt(lastRefresh)}
-          </span>
-          <button className="btn btn-secondary btn-sm" onClick={handleRefresh}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '5px' }}>
-              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-            Refresh
-          </button>
+        <div>
+          <h1 className="builder-title" style={{ fontSize: '18px' }}>Exam Sessions Monitor</h1>
+          <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#666' }}>
+            Track active, submitted, and expired sessions returned by the session module.
+          </p>
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-        {/* Stat bar */}
+      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div className="sess-stat-bar">
-          {(['all', 'in_progress', 'submitted', 'expired'] as FilterType[]).map(f => (
-            <button
-              key={f}
-              className={`sess-stat-pill${filter === f ? ' active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              <span className={`sess-stat-num sess-stat-${f === 'all' ? 'all' : f}`}>
-                {counts[f as keyof typeof counts]}
-              </span>
-              <span className="sess-stat-label">
-                {f === 'all' ? 'All Sessions' : f === 'in_progress' ? 'In Progress' : f === 'submitted' ? 'Submitted' : 'Expired'}
-              </span>
-            </button>
-          ))}
+          <span className="sess-stat-pill active"><span className="sess-stat-num sess-stat-all">{counts.all}</span><span className="sess-stat-label">All Sessions</span></span>
+          <span className="sess-stat-pill"><span className="sess-stat-num sess-stat-in_progress">{counts.in_progress}</span><span className="sess-stat-label">In Progress</span></span>
+          <span className="sess-stat-pill"><span className="sess-stat-num sess-stat-submitted">{counts.submitted}</span><span className="sess-stat-label">Submitted</span></span>
+          <span className="sess-stat-pill"><span className="sess-stat-num sess-stat-expired">{counts.expired}</span><span className="sess-stat-label">Expired</span></span>
         </div>
 
-        {/* Sessions table */}
-        <div className="builder-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="sess-table-header">
-            <span style={{ fontWeight: 700, fontSize: '14px' }}>
-              {filter === 'all' ? 'All Sessions' : statusConfig[filter as SessionStatus]?.label} — {filtered.length} session{filtered.length !== 1 ? 's' : ''}
-            </span>
-          </div>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select className="form-input" value={selectedExamId} onChange={(event) => setSelectedExamId(event.target.value)}>
+            <option value="">Select exam</option>
+            {examOptions.map((exam) => (
+              <option key={String(exam.id)} value={String(exam.id)}>
+                {exam.title}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          {filtered.length === 0 ? (
+        {error && <div style={{ color: '#e53e3e' }}>{error}</div>}
+
+        <div className="builder-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {loadingSessions ? (
+            <div style={{ padding: '24px' }}>Loading sessions...</div>
+          ) : rows.length === 0 ? (
             <div className="students-empty" style={{ padding: '60px 20px' }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.2">
-                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-              </svg>
-              <p>No sessions match this filter.</p>
+              <p>Select an exam to inspect its session lifecycle.</p>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -160,63 +218,35 @@ const ExamSessionsMonitor: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(s => (
-                    <tr key={s.id} className={s.status === 'expired' ? 'sess-row-expired' : ''}>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
                       <td>
                         <div className="sess-student-cell">
-                          <span className="sess-avatar">{s.studentName[0]}</span>
+                          <span className="sess-avatar">{row.studentName[0] || '?'}</span>
                           <div>
-                            <div className="sess-student-name">{s.studentName}</div>
-                            <div className="sess-student-email">{s.studentEmail}</div>
+                            <div className="sess-student-name">{row.studentName}</div>
+                            <div className="sess-student-email">{row.studentEmail}</div>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <span className={`sess-status-chip ${statusConfig[s.status].cls}`}>
-                          {statusConfig[s.status].label}
+                        <span className={`sess-status-chip ${row.status === 'in_progress' ? 'sess-status-active' : row.status === 'submitted' ? 'sess-status-submitted' : 'sess-status-expired'}`}>
+                          {row.status.replace('_', ' ')}
                         </span>
                       </td>
+                      <td>{row.startedAt ? new Date(row.startedAt).toLocaleString() : 'N/A'}</td>
+                      <td>{row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</td>
                       <td>
-                        <div className="sess-time-cell">
-                          <span className="sess-time-main">{fmt(s.startedAt)}</span>
-                          <span className="sess-time-sub">{elapsed(s.startedAt, nowMs)}</span>
-                        </div>
+                        {row.status === 'in_progress' && row.expiresAt
+                          ? formatRemaining(Math.max(0, new Date(row.expiresAt).getTime() - now))
+                          : row.status === 'expired'
+                            ? 'Expired'
+                            : '—'}
                       </td>
+                      <td><span className="sess-sandbox-badge">{row.sandboxSchema}</span></td>
                       <td>
-                        {s.submittedAt ? (
-                          <div className="sess-time-cell">
-                            <span className="sess-time-main">{fmt(s.submittedAt)}</span>
-                            <span className="sess-time-sub" style={{ color: '#38a169' }}>Submitted</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: '#a0aec0', fontSize: '12px' }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        {/* Only show countdown for in-progress */}
-                        {s.status === 'in_progress' ? (
-                          <span
-                            className="sess-countdown"
-                            style={{ color: (s.expiresAt.getTime() - nowMs) < 10 * 60000 ? '#e53e3e' : '#2d3748' }}
-                          >
-                            {countdown(s.expiresAt, nowMs)}
-                          </span>
-                        ) : s.status === 'expired' ? (
-                          <span style={{ color: '#e53e3e', fontSize: '12px', fontWeight: 600 }}>Expired</span>
-                        ) : (
-                          <span style={{ color: '#a0aec0', fontSize: '12px' }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className="sess-sandbox-badge">{s.sandboxSchema}</span>
-                      </td>
-                      <td>
-                        {s.status === 'in_progress' && (
-                          <button
-                            className="sess-force-btn"
-                            onClick={() => handleForceSubmit(s.id)}
-                            title="Force submit this session"
-                          >
+                        {row.status === 'in_progress' && (
+                          <button className="sess-force-btn" onClick={() => void forceSubmit(row.id)}>
                             Force Submit
                           </button>
                         )}
@@ -228,16 +258,26 @@ const ExamSessionsMonitor: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* Legend */}
-        <div className="sess-legend">
-          <span>⚠️ Sessions with &lt;10 min remaining are shown in red.</span>
-          <span>Auto-refresh is live (countdowns update every second).</span>
-          <span>Connect to <code>exam_sessions</code> table to replace mock data.</span>
-        </div>
       </div>
     </div>
   );
+};
+
+const getSessionStatus = (session: Session): SessionStatus => {
+  if (session.isExpired || (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now() && !isSessionComplete(session))) {
+    return 'expired';
+  }
+  if (isSessionComplete(session)) {
+    return 'submitted';
+  }
+  return 'in_progress';
+};
+
+const formatRemaining = (remainingMs: number): string => {
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
 };
 
 export default ExamSessionsMonitor;

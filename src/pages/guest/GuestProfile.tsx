@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { userApi } from '../../api';
 import { useAuth } from '../../contexts';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { getInitials } from '../../utils/queryme';
 
-const AdminProfile: React.FC = () => {
+const GuestProfile: React.FC = () => {
   const { user, updateCurrentUser } = useAuth();
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(user?.role === 'GUEST'));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -18,7 +19,7 @@ const AdminProfile: React.FC = () => {
     const controller = new AbortController();
 
     const loadProfile = async () => {
-      if (!user) {
+      if (!user || user.role !== 'GUEST') {
         setLoading(false);
         return;
       }
@@ -27,16 +28,16 @@ const AdminProfile: React.FC = () => {
       setError(null);
 
       try {
-        const admins = await userApi.getAdmins(controller.signal);
-        const admin = admins.find((candidate) => String(candidate.id) === user.id || candidate.email === user.email);
+        const guests = await userApi.getGuests(controller.signal);
+        const guest = guests.find((candidate) => String(candidate.id) === user.id || candidate.email === user.email);
 
         if (!controller.signal.aborted) {
-          setName(String(admin?.name || admin?.fullName || user.name));
-          setEmail(String(admin?.email || user.email));
+          setName(String(guest?.name || guest?.fullName || user.name));
+          setEmail(String(guest?.email || user.email));
         }
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(extractErrorMessage(err, 'Unable to load your admin profile.'));
+          setError(extractErrorMessage(err, 'Unable to load your guest profile.'));
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -51,7 +52,8 @@ const AdminProfile: React.FC = () => {
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!user) {
+
+    if (!user || user.role !== 'GUEST') {
       return;
     }
 
@@ -60,7 +62,7 @@ const AdminProfile: React.FC = () => {
     setSuccess(null);
 
     try {
-      await userApi.updateAdmin(user.id, {
+      await userApi.updateGuest(user.id, {
         fullName: name,
         email,
         ...(password ? { password } : {}),
@@ -68,23 +70,42 @@ const AdminProfile: React.FC = () => {
 
       updateCurrentUser({ ...user, name, email });
       setPassword('');
-      setSuccess('Your admin profile has been updated.');
+      setSuccess('Your guest profile has been updated.');
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to update your admin profile.'));
+      setError(extractErrorMessage(err, 'Failed to update your guest profile.'));
     } finally {
       setSaving(false);
     }
   };
 
+  if (!user || user.role !== 'GUEST') {
+    return (
+      <div>
+        <div className="page-header">
+          <h1>Guest Profile</h1>
+          <p>Managed guest accounts can update their own profile here after authentication.</p>
+        </div>
+        <div className="content-card">
+          <div className="content-card-body" style={{ textAlign: 'center', padding: '32px' }}>
+            <p style={{ marginBottom: '16px', color: '#666' }}>
+              You are currently browsing the public catalog only. Sign in with a managed guest account to access guest profile settings.
+            </p>
+            <Link to="/auth" className="btn btn-primary">Sign In</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
-    return <div style={{ padding: '24px' }}>Loading admin profile...</div>;
+    return <div style={{ padding: '24px' }}>Loading guest profile...</div>;
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1>Admin Profile</h1>
-        <p>Manage the account identity used for administrative actions.</p>
+        <h1>Guest Profile</h1>
+        <p>Update the identity information attached to your managed guest account.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '22px' }}>
@@ -95,7 +116,7 @@ const AdminProfile: React.FC = () => {
                 width: '80px',
                 height: '80px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #9b2c2c, #e53e3e)',
+                background: 'linear-gradient(135deg, #4a5568, #718096)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -110,7 +131,7 @@ const AdminProfile: React.FC = () => {
             <div style={{ fontSize: '22px', fontWeight: 700 }}>{name}</div>
             <div style={{ fontSize: '13px', opacity: 0.6, marginTop: '4px' }}>{email}</div>
             <div style={{ marginTop: '10px' }}>
-              <span className="badge badge-red">{user?.role || 'ADMIN'}</span>
+              <span className="badge badge-gray">{user.role}</span>
             </div>
           </div>
         </div>
@@ -152,4 +173,4 @@ const AdminProfile: React.FC = () => {
   );
 };
 
-export default AdminProfile;
+export default GuestProfile;

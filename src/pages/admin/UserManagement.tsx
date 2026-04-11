@@ -1,220 +1,197 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { userApi } from '../../api';
+import { useToast } from '../../components/ToastProvider';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { normalizeRole } from '../../utils/queryme';
+import type { PlatformUser, UserRole } from '../../types/queryme';
 
-interface SystemUser {
-  id: number;
+interface ManagedUser {
+  id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'GUEST';
-  status: 'active' | 'suspended' | 'pending';
-  lastLogin: string;
-  sessionDuration?: number; // hours
-  sessionExpiresAt?: string; // string for mockup representation
+  role: UserRole;
 }
 
-const initialUsers: SystemUser[] = [
-  { id: 1, name: 'Admin One', email: 'admin1@queryme.com', role: 'ADMIN', status: 'active', lastLogin: '2 mins ago' },
-  { id: 2, name: 'Prof. Smith', email: 'smith@university.edu', role: 'TEACHER', status: 'active', lastLogin: '1 hour ago' },
-  { id: 3, name: 'Dr. Johnson', email: 'johnson@university.edu', role: 'TEACHER', status: 'active', lastLogin: '2 days ago' },
-  { id: 4, name: 'John Student', email: 'student@queryme.com', role: 'STUDENT', status: 'active', lastLogin: '15 mins ago' },
-  { id: 5, name: 'Jane Doe', email: 'jane.d@queryme.com', role: 'STUDENT', status: 'suspended', lastLogin: '2 weeks ago' },
-  { id: 6, name: 'Visitor User', email: 'visitor@company.com', role: 'GUEST', status: 'suspended', lastLogin: '2 days ago', sessionDuration: 48, sessionExpiresAt: 'Expired' },
-  { id: 7, name: 'Future Guest', email: 'future@company.com', role: 'GUEST', status: 'pending', lastLogin: 'Never', sessionDuration: 12 },
-];
-
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<SystemUser[]>(initialUsers);
-  const [filter, setFilter] = useState<'ALL' | 'TEACHER' | 'STUDENT' | 'ADMIN' | 'GUEST' | 'PENDING'>('ALL');
+  const { showToast } = useToast();
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [filter, setFilter] = useState<'ALL' | UserRole>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modal state
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'reactivate'>('create');
-  const [formData, setFormData] = useState<Partial<SystemUser>>({});
+  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [formRole, setFormRole] = useState<UserRole>('STUDENT');
 
-  const filtered = users.filter(u => {
-    let matchesFilter = false;
-    if (filter === 'ALL') matchesFilter = true;
-    else if (filter === 'PENDING') matchesFilter = u.status === 'pending';
-    else matchesFilter = u.role === filter;
+  const loadUsers = async (signal?: AbortSignal) => {
+    const [admins, teachers, students, guests] = await Promise.all([
+      userApi.getAdmins(signal).catch(() => [] as PlatformUser[]),
+      userApi.getTeachers(signal).catch(() => [] as PlatformUser[]),
+      userApi.getStudents(signal).catch(() => [] as PlatformUser[]),
+      userApi.getGuests(signal).catch(() => [] as PlatformUser[]),
+    ]);
 
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          u.email.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
-
-  const getRoleBadge = (role: string) => {
-    switch(role) {
-      case 'ADMIN': return 'badge-red';
-      case 'TEACHER': return 'badge-blue';
-      case 'STUDENT': return 'badge-purple';
-      case 'GUEST': return 'badge-orange';
-      default: return 'badge-gray';
-    }
+    setUsers(
+      [...admins, ...teachers, ...students, ...guests].map((user) => ({
+        id: String(user.id),
+        name: String(user.name || user.fullName || user.email.split('@')[0]),
+        email: user.email,
+        role: normalizeRole(typeof user.role === 'string' ? user.role : undefined, user.roles),
+      })),
+    );
   };
 
-  const handleToggleStatus = (id: number) => {
-    setUsers(users.map(u => {
-      if (u.id === id) {
-        return { ...u, status: u.status === 'active' ? 'suspended' : 'active' };
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError(null);
+
+    void loadUsers(controller.signal)
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setError(extractErrorMessage(err, 'Failed to load platform users.'));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const filteredUsers = useMemo(
+    () => users.filter((user) => {
+      const matchesFilter = filter === 'ALL' || user.role === filter;
+      const matchesSearch = `${user.name} ${user.email}`.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFilter && matchesSearch;
+    }),
+    [filter, searchQuery, users],
+  );
+
+  const openCreateModal = () => {
+    setEditingUser(null);
+    setFormName('');
+    setFormEmail('');
+    setFormPassword('');
+    setFormRole('STUDENT');
+    setShowModal(true);
+  };
+
+  const openEditModal = (user: ManagedUser) => {
+    setEditingUser(user);
+    setFormName(user.name);
+    setFormEmail(user.email);
+    setFormPassword('');
+    setFormRole(user.role);
+    setShowModal(true);
+  };
+
+  const saveUser = async () => {
+    if (!formName.trim() || !formEmail.trim()) {
+      setError('Name and email are required.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      if (editingUser) {
+        await updateExistingUser(editingUser.id, editingUser.role, {
+          fullName: formName.trim(),
+          email: formEmail.trim(),
+          ...(formPassword ? { password: formPassword } : {}),
+        });
+      } else {
+        await createNewUser(formRole, {
+          fullName: formName.trim(),
+          email: formEmail.trim(),
+          password: formPassword.trim(),
+        });
       }
-      return u;
-    }));
-  };
 
-  const handleOpenCreate = () => {
-    setModalMode('create');
-    setFormData({ name: '', email: '', role: 'STUDENT', status: 'active', sessionDuration: 24 });
-    setShowModal(true);
-  };
-
-  const handleOpenEdit = (user: SystemUser) => {
-    setModalMode('edit');
-    setFormData({ ...user });
-    setShowModal(true);
-  };
-
-  const handleOpenReactivate = (user: SystemUser) => {
-    setModalMode('reactivate');
-    setFormData({ ...user, sessionDuration: 24 });
-    setShowModal(true);
-  };
-
-  const handleApproveGuest = (id: number, duration: number = 24) => {
-    setUsers(users.map(u => u.id === id ? { ...u, status: 'active', sessionDuration: duration, sessionExpiresAt: `In ${duration} Hours` } : u));
-  };
-
-  const handleRejectGuest = (id: number) => {
-    setUsers(users.filter(u => u.id !== id));
-  };
-
-  const handleSaveUser = () => {
-    if (!formData.name && modalMode !== 'reactivate') return;
-    if (!formData.email && modalMode !== 'reactivate') return;
-
-    if (modalMode === 'create') {
-      const newUser: SystemUser = {
-        id: users.length ? Math.max(...users.map(u => u.id)) + 1 : 1,
-        name: formData.name!,
-        email: formData.email!,
-        role: formData.role as any,
-        status: formData.status as any || 'active',
-        lastLogin: 'Never',
-        sessionDuration: formData.role === 'GUEST' ? formData.sessionDuration : undefined,
-        sessionExpiresAt: formData.role === 'GUEST' ? `In ${formData.sessionDuration || 24} Hours` : undefined,
-      };
-      setUsers([...users, newUser]);
-    } else if (modalMode === 'reactivate') {
-      setUsers(users.map(u => u.id === formData.id ? { ...u, status: 'active', sessionDuration: formData.sessionDuration, sessionExpiresAt: `In ${formData.sessionDuration || 24} Hours` } as SystemUser : u));
-    } else {
-      setUsers(users.map(u => u.id === formData.id ? { ...u, ...formData } as SystemUser : u));
+      await loadUsers();
+      setShowModal(false);
+      showToast('success', editingUser ? 'User updated' : 'User created', editingUser ? 'The selected account was updated successfully.' : 'A new account was created successfully.');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to save the user.'));
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
   };
+
+  if (loading) {
+    return <div style={{ padding: '24px' }}>Loading users...</div>;
+  }
 
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>User Management</h1>
-          <p>Register, suspend, and organize platform users</p>
+          <p>Create and update platform identities using the real admin-facing endpoints.</p>
         </div>
-        <button className="btn btn-primary" onClick={handleOpenCreate}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          Add New User
+        <button className="btn btn-primary" onClick={openCreateModal}>
+          Add User
         </button>
       </div>
 
       <div className="content-card">
         <div className="content-card-header" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {(['ALL', 'ADMIN', 'TEACHER', 'STUDENT', 'GUEST', 'PENDING'] as const).map(f => (
-            <button
-              key={f}
-              className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setFilter(f)}
-            >
-              {f}
+          {(['ALL', 'ADMIN', 'TEACHER', 'STUDENT', 'GUEST'] as const).map((value) => (
+            <button key={value} className={`btn btn-sm ${filter === value ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter(value)}>
+              {value}
             </button>
           ))}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-             <input 
-               type="text" 
-               placeholder="Search users by name or email..." 
-               className="form-input" 
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               style={{ padding: '6px 14px', minWidth: '240px' }} 
-             />
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="form-input"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              style={{ padding: '6px 14px', minWidth: '240px' }}
+            />
           </div>
         </div>
+        {error && <div style={{ padding: '12px 24px', color: '#e53e3e' }}>{error}</div>}
         <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
                 <th>User Details</th>
                 <th>Role</th>
-                <th>Status</th>
-                <th>Last Login</th>
+                <th>User ID</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length > 0 ? filtered.map(user => (
-                <tr key={user.id}>
+              {filteredUsers.map((user) => (
+                <tr key={`${user.role}-${user.id}`}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{user.name}</div>
                     <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>{user.email}</div>
                   </td>
+                  <td><span className="badge badge-gray">{user.role}</span></td>
+                  <td>{user.id}</td>
                   <td>
-                    <span className={`badge ${getRoleBadge(user.role)}`}>{user.role}</span>
-                  </td>
-                  <td>
-                    {user.status === 'pending' ? (
-                      <span className="badge badge-orange">PENDING APPROVAL</span>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                        <span className={`badge ${user.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{user.status}</span>
-                        {user.role === 'GUEST' && user.sessionExpiresAt && (
-                           <span style={{ fontSize: '10px', color: user.sessionExpiresAt === 'Expired' ? '#e53e3e' : '#888' }}>
-                             {user.sessionExpiresAt === 'Expired' ? 'Session Expired' : `Expires: ${user.sessionExpiresAt}`}
-                           </span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ fontSize: '12px', color: '#888' }}>
-                    {user.lastLogin}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {user.status === 'pending' ? (
-                        <>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApproveGuest(user.id, user.sessionDuration)}>Approve</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleRejectGuest(user.id)}>Reject</button>
-                        </>
-                      ) : user.role === 'GUEST' && user.sessionExpiresAt === 'Expired' ? (
-                        <>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleOpenReactivate(user)}>Reactivate</button>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleOpenEdit(user)}>Edit</button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEdit(user)}>Edit</button>
-                          <button 
-                            className="btn btn-sm" 
-                            onClick={() => handleToggleStatus(user.id)}
-                            style={{ background: user.status === 'active' ? 'rgba(229,62,62,0.1)' : 'rgba(56, 161, 105, 0.1)', color: user.status === 'active' ? '#e53e3e' : '#38a169', border: 'none' }}
-                          >
-                            {user.status === 'active' ? 'Suspend' : 'Activate'}
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openEditModal(user)}>
+                      Edit
+                    </button>
                   </td>
                 </tr>
-              )) : (
+              ))}
+              {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
-                    No users found matching "{searchQuery}"
+                  <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                    No users match the active filter.
                   </td>
                 </tr>
               )}
@@ -225,100 +202,52 @@ const UserManagement: React.FC = () => {
 
       {showModal && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)'
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(3px)',
         }}>
-          <div className="exam-modal" style={{ borderRadius: '16px', padding: '32px', width: '400px', maxWidth: '90%', textAlign: 'left', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+          <div className="exam-modal" style={{ borderRadius: '16px', padding: '32px', width: '420px', maxWidth: '90%', textAlign: 'left' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '20px', fontWeight: 700 }}>
-              {modalMode === 'create' ? 'Add New User' : modalMode === 'edit' ? 'Edit User' : 'Reactivate Guest'}
+              {editingUser ? 'Edit User' : 'Create User'}
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {modalMode === 'reactivate' ? (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Full Name</label>
+                <input className="form-input" value={formName} onChange={(event) => setFormName(event.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Email Address</label>
+                <input className="form-input" value={formEmail} onChange={(event) => setFormEmail(event.target.value)} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>
+                  {editingUser ? 'New Password (Optional)' : 'Password'}
+                </label>
+                <input type="password" className="form-input" value={formPassword} onChange={(event) => setFormPassword(event.target.value)} style={{ width: '100%' }} />
+              </div>
+              {!editingUser && (
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Renew Session Duration (Hours)</label>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    value={formData.sessionDuration || ''} 
-                    onChange={e => setFormData({ ...formData, sessionDuration: parseInt(e.target.value) })}
-                    placeholder="e.g. 24"
-                    style={{ width: '100%' }} 
-                  />
-                  <p style={{fontSize: '11px', color: '#888', marginTop: '6px'}}>Reactivating this guest will grant them immediate access for the specified duration before auto-suspending.</p>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Role</label>
+                  <select className="form-input" value={formRole} onChange={(event) => setFormRole(event.target.value as UserRole)} style={{ width: '100%' }}>
+                    <option value="STUDENT">Student</option>
+                    <option value="TEACHER">Teacher</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="GUEST">Guest</option>
+                  </select>
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Full Name</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={formData.name || ''} 
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      style={{ width: '100%' }} 
-                    />
-                  </div>
-                  
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Email Address</label>
-                    <input 
-                      type="email" 
-                      className="form-input" 
-                      value={formData.email || ''} 
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      style={{ width: '100%' }} 
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Role</label>
-                    <select 
-                      className="form-input"
-                      value={formData.role || 'STUDENT'}
-                      onChange={e => setFormData({ ...formData, role: e.target.value as any })}
-                      style={{ width: '100%' }}
-                    >
-                      <option value="STUDENT">Student</option>
-                      <option value="TEACHER">Teacher</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="GUEST">Guest</option>
-                    </select>
-                  </div>
-
-                  {formData.role === 'GUEST' && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Session Duration (Hours)</label>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={formData.sessionDuration || 24} 
-                        onChange={e => setFormData({ ...formData, sessionDuration: parseInt(e.target.value) })}
-                        placeholder="e.g. 24"
-                        style={{ width: '100%' }} 
-                      />
-                    </div>
-                  )}
-
-                  {modalMode === 'create' && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Temporary Password</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Auto-generated if left blank"
-                        style={{ width: '100%' }} 
-                      />
-                    </div>
-                  )}
-                </>
               )}
             </div>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSaveUser}>
-                {modalMode === 'create' ? 'Create User' : modalMode === 'edit' ? 'Save Changes' : 'Reactivate Session'}
+              <button className="btn btn-primary" onClick={() => void saveUser()} disabled={saving}>
+                {saving ? 'Saving...' : editingUser ? 'Save Changes' : 'Create User'}
               </button>
             </div>
           </div>
@@ -326,6 +255,42 @@ const UserManagement: React.FC = () => {
       )}
     </div>
   );
+};
+
+const createNewUser = async (role: UserRole, payload: { fullName: string; email: string; password: string }) => {
+  if (role === 'ADMIN') {
+    await userApi.registerAdmin(payload);
+    return;
+  }
+  if (role === 'TEACHER') {
+    await userApi.registerTeacher(payload);
+    return;
+  }
+  if (role === 'GUEST') {
+    await userApi.registerGuest(payload);
+    return;
+  }
+  await userApi.registerStudent(payload);
+};
+
+const updateExistingUser = async (
+  id: string,
+  role: UserRole,
+  payload: { fullName?: string; email?: string; password?: string },
+) => {
+  if (role === 'ADMIN') {
+    await userApi.updateAdmin(id, payload);
+    return;
+  }
+  if (role === 'TEACHER') {
+    await userApi.updateTeacher(id, payload);
+    return;
+  }
+  if (role === 'GUEST') {
+    await userApi.updateGuest(id, payload);
+    return;
+  }
+  await userApi.updateStudent(id, payload);
 };
 
 export default UserManagement;
