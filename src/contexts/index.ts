@@ -1,7 +1,8 @@
 import { use } from 'react';
 import { AuthProvider } from './AuthContext';
 import { AuthContext } from './AuthContextContext';
-import type { AuthContextType, User, UserRole } from './AuthContext';
+import type { AuthContextType } from './AuthContext';
+import type { AuthSessionUser, UserRole } from '../types/queryme';
 
 export const useAuth = () => {
   const context = use(AuthContext);
@@ -12,4 +13,4 @@ export const useAuth = () => {
 };
 
 export { AuthProvider };
-export type { AuthContextType, User, UserRole };
+export type { AuthContextType, AuthSessionUser, UserRole };
