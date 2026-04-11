@@ -13,6 +13,16 @@ interface ExamDraft {
   questionsCount: number;
 }
 
+type StoredExam = {
+  id: string;
+  title: string;
+  courseId?: string;
+  startTime?: string;
+  endTime?: string;
+  status?: 'draft' | 'published' | 'active' | 'closed';
+  questionsCount?: number;
+};
+
 const ExamsList: React.FC = () => {
   const navigate = useNavigate();
   const [exams, setExams] = useState<ExamDraft[]>([]);
@@ -36,10 +46,10 @@ const ExamsList: React.FC = () => {
         // Get exams created by this teacher from localStorage
         const teacherExamsKey = `teacher_exams_${user.id}`;
         const teacherExams = localStorage.getItem(teacherExamsKey);
-        let sessionExams = [];
+        let sessionExams: StoredExam[] = [];
         
         if (teacherExams) {
-          sessionExams = JSON.parse(teacherExams);
+          sessionExams = JSON.parse(teacherExams) as StoredExam[];
         }
         
         // Transform session exams to display format
