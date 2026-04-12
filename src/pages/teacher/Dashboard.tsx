@@ -7,6 +7,7 @@ import ExamsList from './ExamsList';
 import TeacherProfile from './TeacherProfile';
 import ExamSessionsMonitor from './ExamSessionsMonitor';
 import CourseEnrollments from './CourseEnrollments';
+import TeacherCourses from './TeacherCourses';
 import { courseApi, examApi, resultApi, type Exam, type TeacherResultRow } from '../../api';
 import { useAuth } from '../../contexts';
 import type { NavItem } from '../../layout/DashboardLayout';
@@ -22,6 +23,12 @@ const HomeIcon = () => (
 const ExamIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+const CourseIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
   </svg>
 );
 const SessionsIcon = () => (
@@ -43,6 +50,7 @@ const StudentsIcon = () => (
 
 const teacherNav: NavItem[] = [
   { label: 'Dashboard', path: '/teacher', icon: <HomeIcon /> },
+  { label: 'Courses', path: '/teacher/courses', icon: <CourseIcon /> },
   { label: 'Exams', path: '/teacher/exams', icon: <ExamIcon /> },
   { label: 'Sessions', path: '/teacher/sessions', icon: <SessionsIcon /> },
   { label: 'Results', path: '/teacher/results', icon: <ResultsIcon /> },
@@ -143,8 +151,10 @@ const TeacherDashboardHome: React.FC = () => {
       {error && <div style={{ marginBottom: '16px', color: '#e53e3e' }}>{error}</div>}
 
       <div className="td-quick-actions">
+        <Link to="/teacher/courses" className="td-qa-btn td-qa-primary">Create Course</Link>
         <Link to="/teacher/exams/builder" className="td-qa-btn td-qa-primary">Create New Exam</Link>
         <Link to="/teacher/exams" className="td-qa-btn td-qa-secondary">Manage Exams</Link>
+        <Link to="/teacher/courses" className="td-qa-btn td-qa-secondary">Manage Courses</Link>
         <Link to="/teacher/sessions" className="td-qa-btn td-qa-secondary">Live Sessions</Link>
         <Link to="/teacher/results" className="td-qa-btn td-qa-secondary">Review Results</Link>
       </div>
@@ -219,6 +229,7 @@ const TeacherDashboard: React.FC = () => (
   <DashboardLayout navItems={teacherNav} portalTitle="Teacher Portal" accentColor="#38a169">
     <Routes>
       <Route path="/" element={<TeacherDashboardHome />} />
+      <Route path="/courses" element={<TeacherCourses />} />
       <Route path="/exams" element={<ExamsList />} />
       <Route path="/exams/builder" element={<ExamBuilder />} />
       <Route path="/exams/builder/:examId" element={<ExamBuilder />} />

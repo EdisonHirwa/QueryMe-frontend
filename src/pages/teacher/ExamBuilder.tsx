@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { courseApi, examApi, questionApi, type Course, type Question, type VisibilityMode } from '../../api';
 import { useAuth } from '../../contexts';
 import { useToast } from '../../components/ToastProvider';
@@ -34,6 +34,7 @@ const ExamBuilder: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [courses, setCourses] = useState<Course[]>([]);
   const [title, setTitle] = useState('');
   const [courseId, setCourseId] = useState('');
@@ -49,6 +50,7 @@ const ExamBuilder: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const readOnly = useMemo(() => Boolean(examId) && examStatus !== 'DRAFT', [examId, examStatus]);
+  const requestedCourseId = searchParams.get('courseId') || '';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,8 +70,14 @@ const ExamBuilder: React.FC = () => {
 
         if (!controller.signal.aborted) {
           setCourses(teacherCourses);
-          if (!examId && teacherCourses[0]) {
-            setCourseId((previous) => previous || String(teacherCourses[0].id));
+          if (!examId) {
+            const preferredCourseId = requestedCourseId && teacherCourses.some((course) => String(course.id) === requestedCourseId)
+              ? requestedCourseId
+              : teacherCourses[0]
+                ? String(teacherCourses[0].id)
+                : '';
+
+            setCourseId((previous) => previous || preferredCourseId);
           }
         }
 
@@ -104,7 +112,7 @@ const ExamBuilder: React.FC = () => {
 
     void loadBuilder();
     return () => controller.abort();
-  }, [examId, user]);
+  }, [examId, requestedCourseId, user]);
 
   const updateQuestion = (localId: string, patch: Partial<QuestionDraft>) => {
     setQuestions((previous) => previous.map((question) => (question.localId === localId ? { ...question, ...patch } : question)));

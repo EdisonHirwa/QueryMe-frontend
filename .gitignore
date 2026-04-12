@@ -27,4 +27,5 @@ dist-ssr
 .env.*.local
 .env.local
 .env.*.local
+.codex
 BACKEND_ENPOINTS.md

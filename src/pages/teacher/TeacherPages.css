@@ -1207,6 +1207,90 @@ body.dark-mode .students-drag-active { background: rgba(106, 60, 176, 0.1) !impo
 }
 
 /* ============================================
+   Teacher Courses
+   ============================================ */
+.course-page-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 18px;
+}
+.course-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.course-form-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+}
+.course-helper-box {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f7f5ff;
+  border: 1px solid #e9ddff;
+  color: #5b4b83;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.course-empty {
+  padding: 36px 22px;
+  text-align: center;
+  color: #888;
+}
+.course-empty p {
+  margin: 0;
+  line-height: 1.6;
+}
+.course-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid #f5f5fa;
+  transition: background 0.15s ease;
+}
+.course-list-row:last-child {
+  border-bottom: none;
+}
+.course-list-row:hover {
+  background: #fafafe;
+}
+.course-description {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+}
+.course-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.course-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f8f8fc;
+  border: 1px solid #e8e8ee;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.course-list-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ============================================
    Buttons utilities
    ============================================ */
 .btn {
@@ -1860,6 +1944,12 @@ body.dark-mode .enroll-cancel-btn    { border-color: #334155; color: #94a3b8; }
 body.dark-mode .enroll-cancel-btn:hover { border-color: #8b5cf6; color: #d0b3ff; }
 body.dark-mode .enroll-remove-btn    { border-color: #991b1b; color: #fca5a5; }
 body.dark-mode .enroll-remove-btn:hover { background: rgba(220,38,38,0.1); }
+body.dark-mode .course-helper-box { background: rgba(106,60,176,0.14); border-color: rgba(139,92,246,0.35); color: #d8b4fe; }
+body.dark-mode .course-empty { color: #94a3b8; }
+body.dark-mode .course-list-row { border-bottom-color: #1e293b; }
+body.dark-mode .course-list-row:hover { background: #111827; }
+body.dark-mode .course-description { color: #94a3b8; }
+body.dark-mode .course-chip { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 
 /* ============================================
    RESPONSIVE — Teacher Pages
@@ -1894,6 +1984,9 @@ body.dark-mode .enroll-remove-btn:hover { background: rgba(220,38,38,0.1); }
 
   /* Results / gate */
   .res-select-gate { padding: 28px 20px; max-width: 100%; }
+
+  /* Courses */
+  .course-page-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Tablet (≤768px) ── */
@@ -1932,6 +2025,10 @@ body.dark-mode .enroll-remove-btn:hover { background: rgba(220,38,38,0.1); }
   /* Answer keys */
   .ak-q-header { flex-direction: column; align-items: flex-start; }
   .ak-marks-badge { align-self: flex-start; }
+
+  /* Courses */
+  .course-list-row { grid-template-columns: 1fr; align-items: flex-start; }
+  .course-list-actions { justify-content: flex-start; }
 }
 
 /* ── Mobile (≤640px) ── */
@@ -1987,6 +2084,11 @@ body.dark-mode .enroll-remove-btn:hover { background: rgba(220,38,38,0.1); }
   .ak-table th, .ak-table td { padding: 6px 10px; font-size: 11px; }
   .ak-section { padding: 12px 14px; }
   .ak-q-header { padding: 12px 14px; }
+
+  /* Courses */
+  .course-list-row { padding: 16px; }
+  .course-list-actions { width: 100%; }
+  .course-list-actions .btn { flex: 1 1 180px; justify-content: center; }
 
   /* Session live header */
   .sess-live-dot { font-size: 9px; padding: 2px 7px; }
