@@ -7,7 +7,22 @@ import type {
   CourseEnrollmentPayload,
   CreateClassGroupPayload,
   CreateCoursePayload,
+  Identifier,
 } from '../types/queryme';
+
+const normalizeIdentifier = (value: Identifier): string | number => {
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  const trimmed = String(value).trim();
+  return /^-?\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
+};
+
+const toEnrollmentRequest = (payload: CourseEnrollmentPayload) => ({
+  courseId: normalizeIdentifier(payload.courseId),
+  studentId: normalizeIdentifier(payload.studentId),
+});
 
 export const courseApi = {
   async getCourses(signal?: AbortSignal): Promise<Course[]> {
@@ -51,12 +66,21 @@ export const courseApi = {
   },
 
   async createEnrollment(payload: CourseEnrollmentPayload, signal?: AbortSignal): Promise<CourseEnrollment> {
-    const response = await axiosInstance.post<CourseEnrollment>('/course-enrollments', payload, { signal });
+    const request = toEnrollmentRequest(payload);
+    const response = await axiosInstance.post<CourseEnrollment>('/course-enrollments', request, {
+      signal,
+      params: request,
+    });
     return unwrapResponse(response);
   },
 
   async deleteEnrollment(payload: CourseEnrollmentPayload, signal?: AbortSignal): Promise<void> {
-    const response = await axiosInstance.delete<void>('/course-enrollments', { data: payload, signal });
+    const request = toEnrollmentRequest(payload);
+    const response = await axiosInstance.delete<void>('/course-enrollments', {
+      data: request,
+      signal,
+      params: request,
+    });
     return unwrapResponse(response);
   },
 };
