@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { resultApi } from '../../api';
 import { usePublishedExams } from '../../hooks/usePublishedExams';
 import { useStudentSessions } from '../../hooks/useStudentSessions';
 import { useAuth } from '../../contexts';
@@ -20,6 +21,7 @@ interface ExamCardView {
   actionState: ExamActionState;
   actionDisabled: boolean;
   attemptsSummary: string;
+  marksLabel: string;
   sortRank: number;
 }
 
@@ -36,6 +38,57 @@ const AvailableExams: React.FC = () => {
 
   const exams = data ?? [];
   const sessions = sessionsData ?? [];
+  const [marksByExamId, setMarksByExamId] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+
+    const loadLatestExamMarks = async () => {
+      const completedByExam = new Map<string, typeof sessions[number]>();
+
+      sessions
+        .filter((session) => isSessionComplete(session))
+        .forEach((session) => {
+          const examId = String(session.examId);
+          const current = completedByExam.get(examId);
+
+          if (!current) {
+            completedByExam.set(examId, session);
+            return;
+          }
+
+          const currentTime = new Date(current.submittedAt || current.startedAt || 0).getTime();
+          const nextTime = new Date(session.submittedAt || session.startedAt || 0).getTime();
+
+          if (nextTime > currentTime) {
+            completedByExam.set(examId, session);
+          }
+        });
+
+      const marksEntries = await Promise.all(
+        [...completedByExam.entries()].map(async ([examId, latestSession]) => {
+          try {
+            const result = await resultApi.getSessionResult(String(latestSession.id), controller.signal);
+
+            if (result.totalMaxScore != null && result.totalMaxScore > 0 && result.totalScore != null) {
+              return [examId, `${result.totalScore}/${result.totalMaxScore}`] as const;
+            }
+
+            return [examId, 'N/A'] as const;
+          } catch {
+            return [examId, 'N/A'] as const;
+          }
+        }),
+      );
+
+      if (!controller.signal.aborted) {
+        setMarksByExamId(Object.fromEntries(marksEntries));
+      }
+    };
+
+    void loadLatestExamMarks();
+    return () => controller.abort();
+  }, [sessions]);
 
   const examCards = React.useMemo<ExamCardView[]>(() => {
     const completedAttemptsByExam = sessions.reduce<Record<string, number>>((accumulator, session) => {
@@ -69,6 +122,7 @@ const AvailableExams: React.FC = () => {
             actionState: 'CLOSED' as const,
             actionDisabled: true,
             attemptsSummary: `Attempts: ${Math.min(attemptsUsed, maxAttempts)}/${maxAttempts}`,
+            marksLabel: marksByExamId[id] || 'N/A',
             sortRank: 2,
           };
         }
@@ -87,6 +141,7 @@ const AvailableExams: React.FC = () => {
             actionState: 'START' as const,
             actionDisabled: false,
             attemptsSummary: `Attempts: 0/${maxAttempts}`,
+            marksLabel: '',
             sortRank: 0,
           };
         }
@@ -105,6 +160,7 @@ const AvailableExams: React.FC = () => {
             actionState: 'REATTEMPT' as const,
             actionDisabled: false,
             attemptsSummary: `Attempts: ${attemptsUsed}/${maxAttempts}`,
+            marksLabel: marksByExamId[id] || 'N/A',
             sortRank: 0,
           };
         }
@@ -122,6 +178,7 @@ const AvailableExams: React.FC = () => {
           actionState: 'ATTEMPTED' as const,
           actionDisabled: true,
           attemptsSummary: `Attempts: ${maxAttempts}/${maxAttempts}`,
+          marksLabel: marksByExamId[id] || 'N/A',
           sortRank: 1,
         };
       })
@@ -129,7 +186,7 @@ const AvailableExams: React.FC = () => {
         left.sortRank - right.sortRank
         || left.title.localeCompare(right.title)
       ));
-  }, [exams, sessions]);
+  }, [exams, marksByExamId, sessions]);
 
   const isLoading = loading || sessionsLoading;
   const pageError = error || sessionsError;
@@ -244,6 +301,11 @@ const AvailableExams: React.FC = () => {
                   {exam.actionLabel}
                 </button>
                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#888', textAlign: 'center' }}>{exam.attemptsSummary}</div>
+                {exam.actionState !== 'START' && (
+                  <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                    <span className="badge badge-green">Marks: {exam.marksLabel}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
