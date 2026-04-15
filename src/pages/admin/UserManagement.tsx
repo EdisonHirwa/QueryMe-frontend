@@ -9,6 +9,18 @@ import type { PlatformUser } from '../../types/queryme';
 const MANAGED_ROLES = ['TEACHER', 'STUDENT', 'GUEST'] as const;
 type ManagedUserRole = typeof MANAGED_ROLES[number];
 
+const ROLE_LABELS: Record<ManagedUserRole, string> = {
+  TEACHER: 'Teacher',
+  STUDENT: 'Student',
+  GUEST: 'Guest',
+};
+
+const ROLE_DESCRIPTIONS: Record<ManagedUserRole, string> = {
+  TEACHER: 'Can build exams, manage courses, and monitor sessions.',
+  STUDENT: 'Can take assigned exams and view personal results.',
+  GUEST: 'Can explore public catalog and limited platform features.',
+};
+
 interface ManagedUser {
   id: string;
   name: string;
@@ -286,49 +298,91 @@ const UserManagement: React.FC = () => {
       </div>
 
       {showModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backdropFilter: 'blur(3px)',
-        }}>
-          <div className="exam-modal" style={{ borderRadius: '16px', padding: '32px', width: '420px', maxWidth: '90%', textAlign: 'left' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '20px', fontWeight: 700 }}>
-              {editingUser ? 'Edit User' : 'Create User'}
-            </h3>
+        <div className="um-modal-overlay" onClick={() => setShowModal(false)}>
+          <div
+            className="exam-modal um-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingUser ? 'Edit User' : 'Create User'}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="um-modal-header">
+              <h3>{editingUser ? 'Edit User' : 'Create User'}</h3>
+              <p>
+                {editingUser
+                  ? 'Update account details. Leave password empty to keep current access.'
+                  : 'Create a new platform account for teacher, student, or guest access.'}
+              </p>
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Full Name</label>
-                <input className="form-input" value={formName} onChange={(event) => setFormName(event.target.value)} style={{ width: '100%' }} />
+            {error && <div className="um-modal-error">{error}</div>}
+
+            <div className="um-modal-grid">
+              <div className="um-form-field um-field-wide">
+                <label className="um-form-label" htmlFor="user-full-name">Full Name <span>*</span></label>
+                <input
+                  id="user-full-name"
+                  className="form-input"
+                  value={formName}
+                  onChange={(event) => setFormName(event.target.value)}
+                  placeholder="Enter full name"
+                  autoComplete="name"
+                />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Email Address</label>
-                <input className="form-input" value={formEmail} onChange={(event) => setFormEmail(event.target.value)} style={{ width: '100%' }} />
+
+              <div className="um-form-field um-field-wide">
+                <label className="um-form-label" htmlFor="user-email">Email Address <span>*</span></label>
+                <input
+                  id="user-email"
+                  type="email"
+                  className="form-input"
+                  value={formEmail}
+                  onChange={(event) => setFormEmail(event.target.value)}
+                  placeholder="name@company.com"
+                  autoComplete="email"
+                />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>
-                  {editingUser ? 'New Password (Optional)' : 'Password'}
+
+              <div className="um-form-field um-field-wide">
+                <label className="um-form-label" htmlFor="user-password">
+                  {editingUser ? 'New Password (Optional)' : 'Password'} {!editingUser && <span>*</span>}
                 </label>
-                <input type="password" className="form-input" value={formPassword} onChange={(event) => setFormPassword(event.target.value)} style={{ width: '100%' }} />
+                <input
+                  id="user-password"
+                  type="password"
+                  className="form-input"
+                  value={formPassword}
+                  onChange={(event) => setFormPassword(event.target.value)}
+                  placeholder={editingUser ? 'Enter a new password only if needed' : 'Create temporary password'}
+                  autoComplete={editingUser ? 'new-password' : 'off'}
+                />
               </div>
+
               {!editingUser && (
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#888', marginBottom: '6px' }}>Role</label>
-                  <select className="form-input" value={formRole} onChange={(event) => setFormRole(event.target.value as ManagedUserRole)} style={{ width: '100%' }}>
-                    <option value="STUDENT">Student</option>
-                    <option value="TEACHER">Teacher</option>
-                    <option value="GUEST">Guest</option>
-                  </select>
+                <div className="um-form-field um-field-wide">
+                  <label className="um-form-label">Role</label>
+                  <div className="um-role-grid">
+                    {MANAGED_ROLES.map((role) => {
+                      const isActive = formRole === role;
+
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          className={`um-role-option ${isActive ? 'active' : ''}`}
+                          onClick={() => setFormRole(role)}
+                        >
+                          <strong>{ROLE_LABELS[role]}</strong>
+                          <span>{ROLE_DESCRIPTIONS[role]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+            <div className="um-modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => void saveUser()} disabled={saving}>
                 {saving ? 'Saving...' : editingUser ? 'Save Changes' : 'Create User'}
