@@ -319,7 +319,7 @@ const StudentHome: React.FC = () => {
           </div>
           <div className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+              <table className="w-full min-w-155 text-sm">
               <thead>
                 <tr>
                   <th className="bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Exam</th>
@@ -376,7 +376,7 @@ const StudentHome: React.FC = () => {
           </div>
           <div className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-130 text-sm">
               <thead>
                 <tr>
                   <th className="bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Exam</th>
@@ -418,24 +418,119 @@ const StudentHome: React.FC = () => {
       </div>
 
       {pendingStartExam && (
-        <div className="exam-modal-overlay">
-          <div className="exam-modal">
-            <h3>Start exam now?</h3>
-            <p>
-              You are about to start <strong>{pendingStartExam.title}</strong>.
-              {' '}Duration: <strong>{pendingStartExam.duration}</strong>.
-            </p>
-            <p>Do you want to continue?</p>
-            <div className="exam-modal-actions">
-              <button className="btn btn-secondary" onClick={() => setPendingStartExam(null)}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'grid',
+            placeItems: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(4px)',
+            padding: '16px',
+          }}
+          role="presentation"
+          onClick={() => setPendingStartExam(null)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              borderRadius: '16px',
+              backgroundColor: 'white',
+              padding: '32px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(226, 232, 240, 0.8)',
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="start-exam-title"
+            aria-describedby="start-exam-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div
+                style={{
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '9999px',
+                  background: 'linear-gradient(135deg, #c7d2fe 0%, #ddd6fe 100%)',
+                  color: '#4f46e5',
+                  fontSize: '32px',
+                  fontWeight: 900,
+                  marginBottom: '18px',
+                  boxShadow: '0 4px 6px rgba(79, 70, 229, 0.12)',
+                }}
+              >
+                ?
+              </div>
+              <h3 id="start-exam-title" style={{ margin: '0 0 8px', fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>
+                Ready to begin?
+              </h3>
+              <p id="start-exam-description" style={{ margin: 0, fontSize: '15px', color: '#64748b', lineHeight: 1.6 }}>
+                You're about to start <strong>{pendingStartExam.title}</strong>
+                <br />
+                Duration: <strong>{pendingStartExam.duration}</strong>
+              </p>
+            </div>
+            <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '24px', borderLeft: '4px solid #4f46e5' }}>
+              <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: 1.6 }}>
+                This action will lock in your attempt and open the exam session. You cannot pause or navigate away once started.
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <button
+                onClick={() => setPendingStartExam(null)}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  border: '1.5px solid #cbd5e1',
+                  backgroundColor: 'white',
+                  color: '#475569',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                  e.currentTarget.style.borderColor = '#94a3b8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'white';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }}
+              >
                 Cancel
               </button>
               <button
-                className="btn btn-primary"
                 onClick={() => {
                   const examId = pendingStartExam.id;
                   setPendingStartExam(null);
                   navigate(`/student/exam-session/${examId}`);
+                }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(79, 70, 229, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 70, 229, 0.3)';
                 }}
               >
                 Start Exam
