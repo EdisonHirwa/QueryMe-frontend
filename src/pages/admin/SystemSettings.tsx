@@ -225,7 +225,12 @@ const SystemSettings: React.FC = () => {
         <p>Administrative controls backed by real exam and sandbox management endpoints.</p>
       </div>
 
-      {loadError && <div style={{ marginBottom: '16px', color: '#e53e3e' }}>{loadError}</div>}
+      {loadError && (
+        <div className="ss-inline-alert ss-inline-alert-page" role="alert" aria-live="assertive">
+          <strong>Unable to load controls.</strong>
+          <span>{loadError}</span>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '22px' }}>
         <div className="content-card" style={{ gridColumn: '1 / -1' }}>
@@ -303,7 +308,10 @@ const SystemSettings: React.FC = () => {
                 <button className="btn btn-secondary" onClick={() => void destroySandbox()} disabled={!sandboxExamId || !sandboxStudentId}>Delete Sandbox</button>
               </div>
               {sandboxError && (
-                <div style={{ color: '#e53e3e', fontSize: '12px' }}>{sandboxError}</div>
+                <div className="ss-inline-alert" role="alert" aria-live="assertive">
+                  <strong>Sandbox action failed.</strong>
+                  <span>{sandboxError}</span>
+                </div>
               )}
               <textarea className="form-input" value={sandboxInfo} readOnly style={{ minHeight: '220px', fontFamily: 'monospace' }} />
             </div>
@@ -316,7 +324,10 @@ const SystemSettings: React.FC = () => {
             <h2>Global Exam Administration</h2>
           </div>
           {examActionError && (
-            <div style={{ padding: '0 24px 12px', color: '#e53e3e', fontSize: '12px' }}>{examActionError}</div>
+            <div className="ss-inline-alert ss-inline-alert-card" role="alert" aria-live="assertive">
+              <strong>Exam action failed.</strong>
+              <span>{examActionError}</span>
+            </div>
           )}
           <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
             <table className="data-table">
