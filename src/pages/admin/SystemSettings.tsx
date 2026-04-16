@@ -303,9 +303,9 @@ const SystemSettings: React.FC = () => {
                   Selected student: {selectedStudentLabel || 'None'}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn btn-secondary" onClick={() => void inspectSandbox()} disabled={!sandboxExamId || !sandboxStudentId}>Inspect</button>
-                <button className="btn btn-secondary" onClick={() => void destroySandbox()} disabled={!sandboxExamId || !sandboxStudentId}>Delete Sandbox</button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary w-full sm:w-auto" onClick={() => void inspectSandbox()} disabled={!sandboxExamId || !sandboxStudentId}>Inspect</button>
+                <button className="btn btn-secondary w-full sm:w-auto" onClick={() => void destroySandbox()} disabled={!sandboxExamId || !sandboxStudentId}>Delete Sandbox</button>
               </div>
               {sandboxError && (
                 <div className="ss-inline-alert" role="alert" aria-live="assertive">
@@ -329,8 +329,8 @@ const SystemSettings: React.FC = () => {
               <span>{examActionError}</span>
             </div>
           )}
-          <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
-            <table className="data-table">
+          <div className="content-card-body hidden md:block" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table min-w-175">
               <thead>
                 <tr>
                   <th>Exam</th>
@@ -374,6 +374,37 @@ const SystemSettings: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="space-y-3 p-4 md:hidden">
+            {exams.map((exam) => (
+              <div key={`mobile-${String(exam.id)}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="font-semibold text-slate-800">{exam.title?.trim() || 'Untitled Exam'}</div>
+                <div className="mt-1 text-xs text-slate-500">{coursesById[String(exam.courseId)] || getCourseName(exam.course) || 'Unknown Course'}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div><strong>Status:</strong> {normalizeExamStatus(exam.status) || 'N/A'}</div>
+                  <div><strong>Visibility:</strong> {String(exam.visibilityMode || 'N/A')}</div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {normalizeExamStatus(exam.status) === 'DRAFT' && (
+                    <>
+                      <button className="btn btn-sm btn-primary" onClick={() => void runExamAction(String(exam.id), 'publish')}>Publish</button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => void runExamAction(String(exam.id), 'delete')}>Delete</button>
+                    </>
+                  )}
+                  {normalizeExamStatus(exam.status) === 'PUBLISHED' && (
+                    <>
+                      <button className="btn btn-sm btn-secondary" onClick={() => void runExamAction(String(exam.id), 'unpublish')}>Unpublish</button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => void runExamAction(String(exam.id), 'close')}>Close</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+            {exams.length === 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                No exams are available for administrative control.
+              </div>
+            )}
           </div>
         </div>
       </div>

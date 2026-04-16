@@ -422,7 +422,7 @@ const ExamSessionsMonitor: React.FC = () => {
       </div>
 
       <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <button
             type="button"
             className="sess-stat-pill"
@@ -469,7 +469,7 @@ const ExamSessionsMonitor: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '12px' }}>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
             <select className="form-input" value={selectedExamId} onChange={(event) => setSelectedExamId(event.target.value)}>
               <option value="">Select exam</option>
               {examOptions.map((exam) => (
@@ -512,8 +512,9 @@ const ExamSessionsMonitor: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="sess-table">
+            <>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="sess-table min-w-245">
                 <thead>
                   <tr>
                     <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc' }}>Student</th>
@@ -574,8 +575,43 @@ const ExamSessionsMonitor: React.FC = () => {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+
+              <div className="space-y-3 p-4 md:hidden">
+                {filteredRows.map((row) => (
+                  <div key={`mobile-${row.id}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-slate-800">{row.studentName}</div>
+                        <div className="mt-1 text-xs text-slate-500">{row.studentEmail}</div>
+                      </div>
+                      <span className={`sess-status-chip ${row.status === 'in_progress' ? 'sess-status-active' : row.status === 'submitted' ? 'sess-status-submitted' : 'sess-status-expired'}`}>
+                        {row.status.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div><strong>Started:</strong> {row.startedAt ? new Date(row.startedAt).toLocaleString() : 'N/A'}</div>
+                      <div><strong>Submitted:</strong> {row.submittedAt ? new Date(row.submittedAt).toLocaleString() : '—'}</div>
+                      <div>
+                        <strong>Remaining:</strong>{' '}
+                        {row.status === 'in_progress' && row.expiresAt
+                          ? formatRemaining(Math.max(0, new Date(row.expiresAt).getTime() - now))
+                          : row.status === 'expired' ? 'Expired' : '—'}
+                      </div>
+                      <div><strong>Workspace:</strong> {row.hasWorkspace ? 'Provisioned' : 'Pending'}</div>
+                    </div>
+
+                    {row.status === 'in_progress' && (
+                      <button className="sess-force-btn mt-3 w-full" onClick={() => void forceSubmit(row.id)}>
+                        Force Submit
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>

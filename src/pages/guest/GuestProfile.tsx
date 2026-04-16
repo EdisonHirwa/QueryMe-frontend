@@ -109,7 +109,7 @@ const GuestProfile: React.FC = () => {
         <p>Update the identity information attached to your managed guest account.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '22px' }}>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[320px_1fr]">
         <div className="content-card">
           <div className="content-card-body" style={{ textAlign: 'center', padding: '32px 20px' }}>
             <div
@@ -143,7 +143,7 @@ const GuestProfile: React.FC = () => {
           </div>
           <div className="content-card-body">
             <form onSubmit={handleSave}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, opacity: 0.6, marginBottom: '6px' }}>Full Name</label>
                   <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} style={{ width: '100%' }} />

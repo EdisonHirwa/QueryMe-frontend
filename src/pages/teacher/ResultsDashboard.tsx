@@ -489,54 +489,79 @@ const ResultsDashboard: React.FC = () => {
           </div>
         ) : (
           <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Student</th>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Total Score</th>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Questions</th>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Status</th>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Last Submitted</th>
-                  <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRows.map((student) => {
-                  return (
-                    <tr className="results-student-row" key={student.studentId}>
-                      <td className="border-t border-slate-100 px-4 py-3">
-                        <div className="font-semibold text-slate-800">{student.studentName || 'Student'}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {student.questionCount} question{student.questionCount === 1 ? '' : 's'} attempted
-                        </div>
-                      </td>
-                      <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.totalScore}/{student.totalMaxScore} ({student.averagePercent}%)</td>
-                      <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.questionCount}</td>
-                      <td className="border-t border-slate-100 px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${student.status === 'Correct' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {student.status}
-                        </span>
-                      </td>
-                      <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.latestSubmittedAt ? new Date(student.latestSubmittedAt).toLocaleString() : 'N/A'}</td>
-                      <td className="border-t border-slate-100 px-4 py-3">
-                        <button
-                          type="button"
-                          className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedStudent(student);
-                          }}
-                        >
-                          View
-                        </button>
-                      </td>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-215 text-sm">
+                <thead>
+                  <tr>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Student</th>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Total Score</th>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Questions</th>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Status</th>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Last Submitted</th>
+                    <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedRows.map((student) => {
+                    return (
+                      <tr className="results-student-row" key={student.studentId}>
+                        <td className="border-t border-slate-100 px-4 py-3">
+                          <div className="font-semibold text-slate-800">{student.studentName || 'Student'}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {student.questionCount} question{student.questionCount === 1 ? '' : 's'} attempted
+                          </div>
+                        </td>
+                        <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.totalScore}/{student.totalMaxScore} ({student.averagePercent}%)</td>
+                        <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.questionCount}</td>
+                        <td className="border-t border-slate-100 px-4 py-3">
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${student.status === 'Correct' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {student.status}
+                          </span>
+                        </td>
+                        <td className="border-t border-slate-100 px-4 py-3 text-slate-700">{student.latestSubmittedAt ? new Date(student.latestSubmittedAt).toLocaleString() : 'N/A'}</td>
+                        <td className="border-t border-slate-100 px-4 py-3">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedStudent(student);
+                            }}
+                          >
+                            View
+                          </button>
+                        </td>
                       </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
+            <div className="space-y-3 p-4 md:hidden">
+              {paginatedRows.map((student) => (
+                <div key={`mobile-${student.studentId}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="font-semibold text-slate-800">{student.studentName || 'Student'}</div>
+                  <div className="mt-1 text-xs text-slate-500">{student.questionCount} question{student.questionCount === 1 ? '' : 's'} attempted</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div><strong>Score:</strong> {student.totalScore}/{student.totalMaxScore}</div>
+                    <div><strong>Average:</strong> {student.averagePercent}%</div>
+                    <div><strong>Status:</strong> {student.status}</div>
+                    <div><strong>Questions:</strong> {student.questionCount}</div>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">{student.latestSubmittedAt ? new Date(student.latestSubmittedAt).toLocaleString() : 'N/A'}</div>
+                  <button
+                    type="button"
+                    className="mt-3 inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+                    onClick={() => setSelectedStudent(student)}
+                  >
+                    View details
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
               <div className="text-xs font-medium text-slate-500">
                 Showing {pageStart}-{pageEnd} of {filteredRows.length} students
               </div>
@@ -608,7 +633,8 @@ const ResultsDashboard: React.FC = () => {
             </div>
 
             <div className="mx-5 mb-5 overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-105 text-sm">
                 <thead>
                   <tr>
                     <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Question No.</th>
@@ -627,7 +653,8 @@ const ResultsDashboard: React.FC = () => {
                       </tr>
                     ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
           </div>
         </div>

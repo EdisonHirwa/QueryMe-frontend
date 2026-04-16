@@ -99,7 +99,7 @@ const TeacherProfile: React.FC = () => {
         <p>Manage your teacher account details and the courses linked to your profile.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '18px' }}>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[320px_1fr]">
         <div className="content-card">
           <div className="profile-card-body">
             <div className="profile-avatar">{getInitials(name)}</div>
@@ -122,7 +122,7 @@ const TeacherProfile: React.FC = () => {
             </div>
             <div className="content-card-body">
               <form onSubmit={handleSave}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18 }}>
                   <div>
                     <label className="profile-info-label">Full Name</label>
                     <input className="form-input" value={name} onChange={(event) => setName(event.target.value)} style={{ width: '100%' }} />
@@ -153,8 +153,8 @@ const TeacherProfile: React.FC = () => {
             <div className="content-card-header">
               <h2>Courses</h2>
             </div>
-            <div className="content-card-body" style={{ padding: 0 }}>
-              <table className="data-table">
+            <div className="content-card-body hidden md:block" style={{ padding: 0 }}>
+              <table className="data-table min-w-60">
                 <thead>
                   <tr>
                     <th>Course Name</th>
@@ -176,6 +176,18 @@ const TeacherProfile: React.FC = () => {
                 </tbody>
               </table>
             </div>
+              <div className="space-y-3 p-4 md:hidden">
+                {courses.map((course) => (
+                  <div key={course.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="font-semibold text-slate-800">{course.name}</div>
+                  </div>
+                ))}
+                {courses.length === 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                    No linked courses were returned for your profile.
+                  </div>
+                )}
+              </div>
           </div>
         </div>
       </div>

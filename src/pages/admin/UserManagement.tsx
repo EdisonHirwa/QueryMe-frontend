@@ -265,12 +265,12 @@ const UserManagement: React.FC = () => {
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1>User Management</h1>
           <p>Create and update platform identities using the real admin-facing endpoints.</p>
         </div>
-        <button className="btn btn-primary" onClick={openCreateModal}>
+        <button className="btn btn-primary w-full sm:w-auto" onClick={openCreateModal}>
           Add User
         </button>
       </div>
@@ -293,20 +293,20 @@ const UserManagement: React.FC = () => {
               );
             })}
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }} className="sm:w-auto">
             <input
               type="text"
               placeholder="Search users..."
               className="form-input"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              style={{ padding: '6px 14px', minWidth: '240px' }}
+              style={{ padding: '6px 14px', minWidth: '240px', width: '100%' }}
             />
             <select
               className="form-input"
               value={pageSize}
               onChange={(event) => setPageSize(Number(event.target.value) as typeof PAGE_SIZE_OPTIONS[number])}
-              style={{ padding: '6px 14px', minWidth: '120px' }}
+              style={{ padding: '6px 14px', minWidth: '120px', width: '100%' }}
             >
               {PAGE_SIZE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -317,8 +317,8 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
         {error && <div style={{ padding: '12px 24px', color: '#e53e3e' }}>{error}</div>}
-        <div className="content-card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
+        <div className="content-card-body hidden md:block" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table min-w-140">
             <thead>
               <tr>
                 <th>User Details</th>
@@ -350,6 +350,25 @@ const UserManagement: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {paginatedUsers.map((user) => (
+            <div key={`card-${user.role}-${user.id}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="font-semibold text-slate-800">{user.name}</div>
+              <div className="mt-1 text-xs text-slate-500">{user.email}</div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="badge badge-gray">{user.role}</span>
+                <button className="btn btn-secondary btn-sm" onClick={() => openEditModal(user)}>
+                  Edit
+                </button>
+              </div>
+            </div>
+          ))}
+          {paginatedUsers.length === 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+              No users match the active filter.
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', padding: '16px 24px', flexWrap: 'wrap' }}>
           <div style={{ fontSize: '12px', color: '#666' }}>

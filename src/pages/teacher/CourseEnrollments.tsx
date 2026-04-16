@@ -937,7 +937,7 @@ const CourseEnrollments: React.FC = () => {
         </div>
 
         <div className="content-card-body" style={{ paddingTop: 0 }}>
-          <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(280px, 0.8fr)', alignItems: 'stretch' }}>
+          <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
             <div style={{ display: 'grid', gap: '16px', alignContent: 'start' }}>
               <div
                 className={`student-dropzone ${dragActive ? 'dragover' : ''}`}
@@ -1195,7 +1195,7 @@ const CourseEnrollments: React.FC = () => {
         </div>
 
         <div className="content-card-body" style={{ paddingTop: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: '12px', marginBottom: '16px' }}>
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
             <input
               className="res-search-input"
               value={search}
@@ -1214,7 +1214,7 @@ const CourseEnrollments: React.FC = () => {
             </select>
           </div>
 
-          <div className="students-table-wrap" style={{ borderRadius: '16px', overflow: 'hidden' }}>
+          <div className="students-table-wrap hidden md:block" style={{ borderRadius: '16px', overflow: 'hidden' }}>
             {refreshing && filteredTableRows.length === 0 ? (
               <InlineSkeleton rows={5} className="p-6" />
             ) : filteredTableRows.length === 0 ? (
@@ -1272,6 +1272,46 @@ const CourseEnrollments: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          <div className="space-y-3 md:hidden">
+            {refreshing && filteredTableRows.length === 0 ? (
+              <InlineSkeleton rows={4} className="p-4" />
+            ) : filteredTableRows.length === 0 ? (
+              <div className="students-empty rounded-xl border border-slate-200 bg-white p-4 text-center">
+                <p>{selectedCourseId ? 'No students are linked to this course yet.' : 'No enrolled students were found for your courses yet.'}</p>
+              </div>
+            ) : (
+              paginatedTableRows.map((member) => (
+                <div key={`mobile-${member.courseId}-${member.studentId}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div style={{ display: 'grid', gap: '4px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: isDarkMode ? '#e2e8f0' : '#0f172a' }}>{member.courseName}</div>
+                    <div style={{ fontSize: '12px', color: isDarkMode ? '#94a3b8' : '#64748b' }}>Course enrollment</div>
+                  </div>
+
+                  <div className="mt-3 students-table-avatar">
+                    <div className="students-avatar-letter">{member.studentName.charAt(0).toUpperCase() || '?'}</div>
+                    <div>
+                      <div className="students-table-name">{member.studentName}</div>
+                      <div className="students-table-email">{member.studentEmail}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="badge badge-gray">{getMembershipSourceLabel(member.source)}</span>
+                    <div style={{ fontSize: '12px', color: isDarkMode ? '#94a3b8' : '#64748b' }}>{member.enrolledAt ? new Date(member.enrolledAt).toLocaleString() : 'N/A'}</div>
+                  </div>
+
+                  <button
+                    className="enroll-remove-btn mt-3 w-full"
+                    type="button"
+                    onClick={() => void handleRemove(member)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))
             )}
           </div>
 

@@ -461,7 +461,7 @@ const ExamBuilder: React.FC = () => {
             This builder now saves directly to the backend exam and question modules.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={() => navigate('/teacher/exams')}>Cancel</button>
           <button className="btn btn-secondary" onClick={() => void handleSaveDraft()} disabled={saving || readOnly}>
             {saving ? saveProgress || 'Saving...' : 'Save Draft'}
@@ -490,7 +490,7 @@ const ExamBuilder: React.FC = () => {
 
         <div className="builder-card">
           <h2 className="students-card-title">Exam Details</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '16px' }}>
             <input className="form-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Exam title" disabled={Boolean(readOnly)} />
             <select className="form-input" value={courseId} onChange={(event) => setCourseId(event.target.value)} disabled={Boolean(readOnly)}>
               <option value="">Select course</option>
@@ -537,7 +537,7 @@ const ExamBuilder: React.FC = () => {
         </div>
 
         <div className="builder-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <h2 className="students-card-title">Seed SQL</h2>
             <label className="btn btn-secondary btn-sm" style={{ cursor: readOnly ? 'not-allowed' : 'pointer', opacity: readOnly ? 0.6 : 1 }}>
               Upload `.sql`

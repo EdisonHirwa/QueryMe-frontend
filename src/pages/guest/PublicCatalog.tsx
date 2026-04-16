@@ -87,7 +87,7 @@ const PublicCatalog: React.FC = () => {
       </div>
 
       <div className="content-card" style={{ marginBottom: '20px' }}>
-        <div className="content-card-body" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '12px' }}>
+        <div className="content-card-body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) auto', gap: '12px' }}>
           <input
             className="form-input"
             placeholder="Search courses, teachers, or class groups..."
@@ -108,7 +108,7 @@ const PublicCatalog: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
         <div className="content-card">
           <div className="content-card-header">
             <h2>Courses</h2>

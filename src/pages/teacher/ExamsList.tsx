@@ -183,7 +183,8 @@ const ExamsList: React.FC = () => {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-220 text-sm">
             <thead>
               <tr>
                 <th className="bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Exam</th>
@@ -239,7 +240,48 @@ const ExamsList: React.FC = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
+
+          <div className="space-y-3 p-4 md:hidden">
+            {exams.map((exam) => (
+              <div key={`mobile-${exam.id}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="font-semibold text-slate-800">{exam.title}</div>
+                <div className="mt-1 text-xs text-slate-500">{exam.course}</div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div><strong>Questions:</strong> {exam.questionsCount}</div>
+                  <div><strong>Attempts:</strong> {exam.maxAttempts}</div>
+                  <div><strong>Visibility:</strong> {exam.visibilityMode}</div>
+                  <div><strong>Status:</strong> {exam.status}</div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700" onClick={() => navigate(`/teacher/exams/builder/${exam.id}`)}>
+                    Edit
+                  </button>
+                  {exam.status === 'DRAFT' && (
+                    <button className="inline-flex items-center rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60" disabled={busyExamId === exam.id} onClick={() => void runAction(exam.id, 'publish')}>
+                      Publish
+                    </button>
+                  )}
+                  {exam.status === 'PUBLISHED' && (
+                    <>
+                      <button className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" disabled={busyExamId === exam.id} onClick={() => void runAction(exam.id, 'unpublish')}>
+                        Unpublish
+                      </button>
+                      <button className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" disabled={busyExamId === exam.id} onClick={() => void runAction(exam.id, 'close')}>
+                        Close
+                      </button>
+                    </>
+                  )}
+                  {exam.status === 'DRAFT' && (
+                    <button className="inline-flex items-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60" disabled={busyExamId === exam.id} onClick={() => void runAction(exam.id, 'delete')}>
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

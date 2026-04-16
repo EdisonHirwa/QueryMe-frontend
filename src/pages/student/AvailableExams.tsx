@@ -269,7 +269,7 @@ const AvailableExams: React.FC = () => {
           No published exams are currently visible to you.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
           {examCards.map((exam) => (
             <div key={exam.id} className="content-card" style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="content-card-body" style={{ flex: 1 }}>
@@ -287,7 +287,7 @@ const AvailableExams: React.FC = () => {
                   {exam.description || 'No description provided.'}
                 </p>
 
-                <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#666', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#666', marginBottom: '14px', flexWrap: 'wrap' }}>
                   <span>Course: {exam.courseName}</span>
                   <span>Visibility: {String(exam.visibilityMode || 'N/A')}</span>
                 </div>

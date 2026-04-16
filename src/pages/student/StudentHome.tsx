@@ -318,7 +318,8 @@ const StudentHome: React.FC = () => {
             </button>
           </div>
           <div className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-sm">
               <thead>
                 <tr>
                   <th className="bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Exam</th>
@@ -361,7 +362,8 @@ const StudentHome: React.FC = () => {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -373,7 +375,8 @@ const StudentHome: React.FC = () => {
             </button>
           </div>
           <div className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr>
                   <th className="bg-slate-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-violet-700">Exam</th>
@@ -408,7 +411,8 @@ const StudentHome: React.FC = () => {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </div>
       </div>

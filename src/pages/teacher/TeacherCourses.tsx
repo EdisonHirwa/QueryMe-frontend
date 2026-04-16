@@ -113,7 +113,7 @@ const TeacherCourses: React.FC = () => {
         <p>Create courses from the teacher portal and use them immediately for exams and student enrollment.</p>
       </div>
 
-      <div className="stat-grid" style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', width: '100%' }}>
+      <div className="stat-grid" style={{ marginBottom: '20px', width: '100%' }}>
         <div className="stat-card"><div className="stat-card-value">{sortedCourses.length}</div><div className="stat-card-label">Total Courses</div></div>
         <div className="stat-card"><div className="stat-card-value">{describedCourses}</div><div className="stat-card-label">With Description</div></div>
         <div className="stat-card"><div className="stat-card-value">{sortedCourses.length - describedCourses}</div><div className="stat-card-label">Need Description</div></div>
@@ -121,7 +121,7 @@ const TeacherCourses: React.FC = () => {
 
       {error && <div style={{ marginBottom: '16px', color: '#e53e3e', fontSize: '13px' }}>{error}</div>}
 
-      <div className="course-page-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', width: '100%' }}>
+      <div className="course-page-grid" style={{ gap: '20px', width: '100%' }}>
         <div className="content-card">
           <div className="content-card-header">
             <h2>Create Course</h2>
@@ -157,11 +157,11 @@ const TeacherCourses: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button className="btn btn-primary" type="submit" disabled={saving}>
+                <button className="btn btn-primary w-full sm:w-auto" type="submit" disabled={saving}>
                   {saving ? 'Creating...' : 'Create Course'}
                 </button>
                 <button
-                  className="btn btn-secondary"
+                  className="btn btn-secondary w-full sm:w-auto"
                   type="button"
                   disabled={saving || (!name && !description)}
                   onClick={() => {

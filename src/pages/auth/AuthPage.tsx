@@ -110,15 +110,15 @@ const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#e8e5f2_0%,#d8d8ea_100%)] px-4 py-6 text-left sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-310 items-center justify-center">
-        <div className="relative w-full min-h-172.5 overflow-hidden rounded-[26px] shadow-[0_28px_90px_rgba(92,70,140,0.28)] ring-1 ring-white/70">
-          <div className="grid min-h-172.5 grid-cols-1 xl:grid-cols-2">
-            <section className={`relative flex min-h-172.5 items-center justify-center overflow-hidden px-6 py-10 sm:px-10 lg:px-16 ${isSignUp ? 'bg-[linear-gradient(135deg,#8e09c6_0%,#7607b0_45%,#5a0b92_100%)]' : 'bg-white'}`}>
+    <div className="auth-page min-h-screen bg-[linear-gradient(180deg,#e8e5f2_0%,#d8d8ea_100%)] px-4 py-4 text-left sm:px-6 sm:py-6 lg:px-8">
+      <div className="auth-shell mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-310 items-center justify-center sm:min-h-[calc(100vh-3rem)]">
+        <div className="auth-card relative w-full min-h-172.5 overflow-hidden rounded-[26px] shadow-[0_28px_90px_rgba(92,70,140,0.28)] ring-1 ring-white/70 max-sm:min-h-0 max-sm:rounded-2xl">
+          <div className="auth-grid grid min-h-172.5 grid-cols-1 xl:grid-cols-2 max-sm:min-h-0">
+            <section className={`auth-panel relative flex min-h-172.5 items-center justify-center overflow-hidden px-6 py-10 sm:px-10 lg:px-16 max-sm:min-h-96 max-sm:px-5 max-sm:py-8 ${isSignUp ? 'bg-[linear-gradient(135deg,#8e09c6_0%,#7607b0_45%,#5a0b92_100%)]' : 'bg-white'}`}>
               <div className={`absolute inset-0 flex items-center justify-center px-6 py-10 sm:px-10 lg:px-16 ${formMotion} ${isSignUp ? 'pointer-events-none translate-x-6 opacity-0 delay-100' : 'translate-x-0 opacity-100 delay-0'}`}>
                 <form onSubmit={handleLogin} className="flex w-full max-w-90 flex-col items-center text-center">
-                  <img src={logoImg} alt="QueryMe Logo" className="mb-9 h-16 w-auto object-contain sm:mb-11 sm:h-18" />
-                  <h1 className="mb-7 text-[2.25rem] font-semibold leading-none tracking-tight text-[#30313a]">Sign In</h1>
+                  <img src={logoImg} alt="QueryMe Logo" className="mb-7 h-14 w-auto object-contain sm:mb-11 sm:h-18" />
+                  <h1 className="mb-6 text-[2rem] font-semibold leading-none tracking-tight text-[#30313a] sm:mb-7 sm:text-[2.25rem]">Sign In</h1>
 
                   <div className="w-full space-y-2.5">
                     <Field type="email" placeholder="admin@agrip2p.rw" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); setLoginError(''); }} id="signin-email-input" autoComplete="email" disabled={isSigningIn} />
@@ -135,7 +135,7 @@ const AuthPage: React.FC = () => {
                     <a href="#" className="text-slate-500 transition hover:text-slate-700" id="forgot-password-link">Forget Your Password?</a>
                   </div>
 
-                  <button type="submit" className="mt-9 inline-flex h-11 w-40 items-center justify-center rounded-md bg-[#7c10b8] px-5 text-xs font-semibold tracking-[0.24em] text-white shadow-[0_10px_24px_rgba(124,16,184,0.35)] transition duration-500 hover:-translate-y-0.5 hover:bg-[#6d0fa2] disabled:cursor-not-allowed disabled:opacity-70" id="signin-submit-btn" disabled={isSigningIn}>
+                  <button type="submit" className="mt-9 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#7c10b8] px-5 text-xs font-semibold tracking-[0.24em] text-white shadow-[0_10px_24px_rgba(124,16,184,0.35)] transition duration-500 hover:-translate-y-0.5 hover:bg-[#6d0fa2] disabled:cursor-not-allowed disabled:opacity-70 sm:w-40" id="signin-submit-btn" disabled={isSigningIn}>
                     {isSigningIn ? (
                       <span className="inline-flex items-center gap-2">
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -157,11 +157,11 @@ const AuthPage: React.FC = () => {
               </div>
             </section>
 
-            <section className={`relative flex min-h-172.5 items-center justify-center overflow-hidden px-6 py-10 sm:px-10 lg:px-16 ${isSignUp ? 'bg-white' : 'bg-[linear-gradient(135deg,#8e09c6_0%,#7607b0_45%,#5a0b92_100%)]'}`}>
+            <section className={`auth-panel relative flex min-h-172.5 items-center justify-center overflow-hidden px-6 py-10 sm:px-10 lg:px-16 max-sm:min-h-96 max-sm:px-5 max-sm:py-8 ${isSignUp ? 'bg-white' : 'bg-[linear-gradient(135deg,#8e09c6_0%,#7607b0_45%,#5a0b92_100%)]'}`}>
               <div className={`absolute inset-0 flex items-center justify-center px-6 py-10 sm:px-10 lg:px-16 ${formMotion} ${isSignUp ? 'opacity-100 translate-x-0 delay-0' : 'pointer-events-none translate-x-6 opacity-0 delay-100'}`}>
                 <form onSubmit={handleSignup} className="flex w-full max-w-90 flex-col items-center text-center">
-                  <img src={logoImg} alt="QueryMe Logo" className="mb-10 h-14 w-auto object-contain opacity-95" />
-                  <h1 className="text-[2.45rem] font-semibold leading-none tracking-tight text-[#30313a]">Create Account</h1>
+                  <img src={logoImg} alt="QueryMe Logo" className="mb-8 h-14 w-auto object-contain opacity-95 sm:mb-10" />
+                  <h1 className="text-[2rem] font-semibold leading-none tracking-tight text-[#30313a] sm:text-[2.45rem]">Create Account</h1>
 
                   <div className="mt-8 w-full space-y-2.5">
                     <Field type="text" placeholder="Name" value={signupName} onChange={(e) => setSignupName(e.target.value)} id="signup-name-input" autoComplete="name" disabled={isSigningUp} />
@@ -174,7 +174,7 @@ const AuthPage: React.FC = () => {
 
                   {signupError && <span className="mt-2 self-stretch text-sm font-medium text-rose-600">{signupError}</span>}
 
-                  <button type="submit" className="mt-7 inline-flex h-11 w-40 items-center justify-center rounded-md bg-[#7c10b8] px-5 text-xs font-semibold tracking-[0.24em] text-white shadow-[0_10px_24px_rgba(47,11,72,0.24)] transition duration-500 hover:-translate-y-0.5 hover:bg-[#6d0fa2] disabled:cursor-not-allowed disabled:opacity-70" id="signup-submit-btn" disabled={isSigningUp}>
+                  <button type="submit" className="mt-7 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#7c10b8] px-5 text-xs font-semibold tracking-[0.24em] text-white shadow-[0_10px_24px_rgba(47,11,72,0.24)] transition duration-500 hover:-translate-y-0.5 hover:bg-[#6d0fa2] disabled:cursor-not-allowed disabled:opacity-70 sm:w-40" id="signup-submit-btn" disabled={isSigningUp}>
                     {isSigningUp ? (
                       <span className="inline-flex items-center gap-2">
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
